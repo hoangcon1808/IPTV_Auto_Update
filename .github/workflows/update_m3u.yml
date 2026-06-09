@@ -1,0 +1,41 @@
+name: Tự Động Cập Nhật M3U (1 Giờ/Lần)
+
+on:
+  schedule:
+    # Cấu hình Cron chạy mỗi 1 tiếng 1 lần (Theo giờ UTC)
+    - cron: '0 */1 * * *'
+  # Cho phép bạn bấm nút chạy thủ công bất cứ lúc nào trên Github
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Thiết lập Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Cài đặt thư viện cần thiết (Selenium & Tkinter Dummy)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk
+        python -m pip install --upgrade pip
+        pip install selenium
+
+    - name: Chạy Tool Cào Data
+      # Tham số --startup sẽ gọi trực tiếp quy trình chạy ngầm (Headless)
+      run: python "m3u link.py" --startup
+
+    - name: Lưu đè file vn.m3u lên GitHub
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add vn.m3u
+        # Nếu có sự thay đổi về file thì mới commit
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto Update: Làm mới Token IPTV"
+        git push
