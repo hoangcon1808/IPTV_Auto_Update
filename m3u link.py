@@ -198,13 +198,13 @@ class AllInOneIPTVTool:
                 self.startup_var.set(True)
 
     # ========================================================
-    # SỬA: CHỐNG TREO, TRẢ VỀ DANH SÁCH PROXY (THAY VÌ 1 PROXY)
+    # SỬA: THÊM API GEONODE, FIX LỖI SPYS.ONE BỊ CHẶN BOT
     # ========================================================
     def _get_auto_vn_proxy(self):
         self.log("   [Proxy] Bắt đầu tổng hợp Proxy VN từ đa nguồn (API & Web Cào)...")
         proxy_pool = []
 
-        # --- NGUỒN 1: API (Nhanh nhất) ---
+        # --- NGUỒN 1: API ProxyScrape ---
         try:
             self.log("      [Debug] Đang gọi API ProxyScrape...")
             url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
@@ -221,16 +221,37 @@ class AllInOneIPTVTool:
         except Exception as e:
             self.log(f"   [Proxy] Nguồn 1 Lỗi: {e}")
 
+        # --- NGUỒN 4: API Geonode ---
+        try:
+            self.log("      [Debug] Đang gọi API Geonode...")
+            url = "https://proxylist.geonode.com/api/proxy-list?country=VN&protocols=http%2Chttps&limit=50&page=1&sort_by=lastChecked&sort_type=desc"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(response.read().decode('utf-8'))
+            count = 0
+            for item in data.get('data', []):
+                ip = item.get('ip')
+                port = item.get('port')
+                if ip and port:
+                    proxy_pool.append({'ip': f"{ip}:{port}", 'source': 'API_Geonode'})
+                    count += 1
+            self.log(f"   [Proxy] Nguồn 4 (API Geonode): Thu được {count} IPs.")
+        except Exception as e:
+            self.log(f"   [Proxy] Nguồn 4 Lỗi: {e}")
+
+
         # --- NGUỒN WEB (SELENIUM) ---
         self.log("   [Proxy] Khởi động Selenium ngầm để quét thêm Proxy Web...")
         chrome_options = Options()
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--log-level=3") 
+        # Fake User-Agent để tránh bị Spys.one block vì dùng Headless Chrome
+        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+        
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
-            # ÉP TIMEOUT NGẮN ĐỂ TRÁNH BỊ TREO KHI WEB CHẾT
             driver.set_page_load_timeout(15) 
 
             # --- NGUỒN 2: Free-Proxy-List.net ---
@@ -245,11 +266,11 @@ class AllInOneIPTVTool:
                     if " VN " in line or "Vietnam" in line:
                         match = re.search(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)(?!\d)', line)
                         if match:
-                            proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxyList'})
+                            proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxy'})
                             count += 1
                 self.log(f"   [Proxy] Nguồn 2 (Free-Proxy-List): Thu được {count} IPs.")
             except TimeoutException:
-                self.log("   [Proxy] Nguồn 2 Lỗi: Trang web load quá thời gian 15s (Timeout).")
+                self.log("   [Proxy] Nguồn 2 Lỗi: Trang web load quá thời gian 15s.")
             except Exception as e:
                 self.log(f"   [Proxy] Nguồn 2 Lỗi: {e}")
 
@@ -262,30 +283,37 @@ class AllInOneIPTVTool:
                 try:
                     WebDriverWait(driver, 8).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
                     self.log("      [Debug] Đã tìm thấy dữ liệu Spys.one, tiến hành bóc tách...")
-                except:
-                    self.log("      [Debug] Spys.one không load được bảng dữ liệu hoặc dính Captcha.")
-
-                js_extract = """
-                    var results = [];
-                    var elements = document.querySelectorAll('font.spy14');
-                    for(var i = 0; i < elements.length; i++) {
-                        var txt = elements[i].innerText.trim();
-                        if(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(txt)) {
-                            results.push(txt);
+                    
+                    js_extract = """
+                        var results = [];
+                        var elements = document.querySelectorAll('font.spy14');
+                        for(var i = 0; i < elements.length; i++) {
+                            var txt = elements[i].innerText.trim();
+                            if(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(txt)) {
+                                results.push(txt);
+                            }
                         }
-                    }
-                    return results;
-                """
-                matches = driver.execute_script(js_extract)
-                
-                count = 0
-                if matches:
-                    for ip_port in matches:
-                        proxy_pool.append({'ip': ip_port, 'source': 'WEB_SpysOne'})
-                        count += 1
-                self.log(f"   [Proxy] Nguồn 3 (Spys.one): Thu được {count} IPs.")
+                        return results;
+                    """
+                    matches = driver.execute_script(js_extract)
+                    
+                    count = 0
+                    if matches:
+                        for ip_port in matches:
+                            proxy_pool.append({'ip': ip_port, 'source': 'WEB_SpysOne'})
+                            count += 1
+                    self.log(f"   [Proxy] Nguồn 3 (Spys.one): Thu được {count} IPs.")
+                except Exception:
+                    # DEBUG XEM SELENIUM THỰC SỰ NHÌN THẤY GÌ
+                    try:
+                        page_title = driver.title
+                        body_snippet = driver.execute_script("return document.body.innerText;").strip()[:100]
+                        self.log(f"      [Debug Selenium] Bị chặn. Title: '{page_title}' | Body: '{body_snippet}...'")
+                    except: pass
+                    self.log("   [Proxy] Nguồn 3 Lỗi: Quá giờ giải mã hoặc bị chặn bởi Captcha/Cloudflare.")
+
             except TimeoutException:
-                self.log("   [Proxy] Nguồn 3 Lỗi: Trang web load quá thời gian 15s (Timeout).")
+                self.log("   [Proxy] Nguồn 3 Lỗi: Trang web load quá thời gian 15s.")
             except Exception as e:
                 self.log(f"   [Proxy] Nguồn 3 Lỗi: {e}")
 
@@ -305,7 +333,7 @@ class AllInOneIPTVTool:
 
         self.log(f"   [Proxy] Đã lọc được {len(unique_proxies)} IP VN unique. Bắt đầu test PING tới VTVGo...")
 
-        working_proxies = [] # Lưu danh sách proxy sống dạng tuple: (ping_time, ip, source)
+        working_proxies = [] 
 
         tested_count = 0
         for ip, source in unique_proxies.items():
@@ -334,7 +362,6 @@ class AllInOneIPTVTool:
         self.log(f"   [Proxy] Đã test xong {tested_count} IPs. Có {len(working_proxies)} IPs hoạt động.")
 
         if working_proxies:
-            # Sắp xếp danh sách proxy theo Ping từ thấp đến cao
             working_proxies.sort(key=lambda x: x[0])
             self.log(f"   [Proxy] ✅ Top 1: {working_proxies[0][1]} ({working_proxies[0][0]:.2f}s)")
             if len(working_proxies) > 1:
@@ -398,13 +425,11 @@ class AllInOneIPTVTool:
 
     def catch_m3u8_vtvgo(self, driver, url):
         try:
-            self.log(f"      [Debug] Đang bắt đầu truy cập URL: {url}")
+            self.log(f"      [Debug] Đang truy cập URL: {url}")
             driver.get_log('performance') 
             driver.get(url)
             time.sleep(2) 
             
-            self.log(f"      [Debug] Proxy phản hồi Title trang là: '{driver.title}'")
-
             try:
                 driver.execute_script("""
                     var btns = document.getElementsByTagName('button');
@@ -423,11 +448,7 @@ class AllInOneIPTVTool:
                         log_data = json.loads(entry['message'])['message']
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
-                            if '.m3u8' in req_url:
-                                self.log(f"      [Debug] Bắt được gói m3u8 bất kỳ: {req_url}")
-                            
                             vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'index']
-                            
                             if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
                                 return req_url, "OK"
                     except: continue
@@ -439,12 +460,10 @@ class AllInOneIPTVTool:
 
     def catch_m3u8_tv360(self, driver, url):
         try:
-            self.log(f"      [Debug] Đang bắt đầu truy cập URL: {url}")
+            self.log(f"      [Debug] Đang truy cập URL: {url}")
             driver.get_log('performance') 
             driver.get(url)
             time.sleep(3) 
-
-            self.log(f"      [Debug] Proxy phản hồi Title trang là: '{driver.title}'")
             
             is_premium = driver.execute_script("return document.body.innerText.includes('Nội dung có phí') || document.body.innerText.includes('Vui lòng đăng ký gói');")
             if is_premium:
@@ -461,8 +480,6 @@ class AllInOneIPTVTool:
                         log_data = json.loads(entry['message'])['message']
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
-                            if '.m3u8' in req_url:
-                                self.log(f"      [Debug] Bắt được gói m3u8 bất kỳ: {req_url}")
                             if '.m3u8' in req_url and 'uid=' in req_url:
                                 return req_url, "OK"
                     except: continue
@@ -472,12 +489,10 @@ class AllInOneIPTVTool:
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # ========================================================
-    # SỬA LỚN: TÍCH HỢP LOGIC CÀO 2 LỚP (2-TIER SCRAPING)
-    # ========================================================
     def extract_all_data(self):
         self.save_settings() 
         old_links_dict = self.load_old_m3u_links()
+        
         master_channels_list = []
         vtv_token = None
         vtv_ts = None
@@ -493,186 +508,183 @@ class AllInOneIPTVTool:
                     self.log("❌ CRITICAL: Không tìm thấy Proxy VN hợp lệ nào. Hủy bỏ tiến trình để bảo vệ file M3U cũ khỏi bị ghi đè!")
                     return None, None, None
                 
-                # Lấy Proxy Tốt nhất và Proxy Nhì (Nếu có)
                 proxy_1_ip = working_proxies[0][1]
                 if len(working_proxies) > 1:
                     proxy_2_ip = working_proxies[1][1]
 
-            self.log(f"Đang khởi động trình duyệt nguyên bản (LƯỢT 1 - Proxy: {proxy_1_ip})...")
-            chrome_options = Options()
-            chrome_options.add_argument("--headless=new") 
-            chrome_options.add_argument("--mute-audio")
-            chrome_options.add_argument("--window-size=1920,1080")
-            chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
-            chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
-            
-            if proxy_1_ip:
-                chrome_options.add_argument(f'--proxy-server=http://{proxy_1_ip}')
-
-            driver = webdriver.Chrome(options=chrome_options)
-            driver.set_page_load_timeout(90) 
+            proxies_to_test = [proxy_1_ip]
+            if proxy_2_ip: proxies_to_test.append(proxy_2_ip)
 
             # ==========================================
-            # BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO
+            # BƯỚC 1: LẤY DATA NỀN (TOKEN VTV + KÊNH) ÁP DỤNG 2 LỚP PROXY
             # ==========================================
-            self.log("Đang truy cập VTVGo lấy Dữ liệu Kênh...")
-            driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-            time.sleep(3) 
-            
-            try:
-                driver.execute_script("""
-                    var btns = document.getElementsByTagName('button');
-                    for (var i=0; i<btns.length; i++) {
-                        if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
-                    }
-                    var vids = document.getElementsByTagName('video');
-                    if(vids.length>0) vids[0].play();
-                """)
-            except: pass
-            time.sleep(2)
+            for attempt, current_proxy in enumerate(proxies_to_test, 1):
+                if driver: 
+                    try: driver.quit()
+                    except: pass
 
-            page_source = driver.page_source
-            match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
-            if match:
+                self.log(f"▶ BẮT ĐẦU CÀO DATA NỀN TẢNG (LƯỢT {attempt} - Proxy: {current_proxy})...")
+                master_channels_list = [] # Reset lại danh sách nếu chạy Lượt 2
+                
+                chrome_options = Options()
+                chrome_options.add_argument("--headless=new") 
+                chrome_options.add_argument("--mute-audio")
+                chrome_options.add_argument("--window-size=1920,1080")
+                chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
+                chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+                
+                if current_proxy:
+                    chrome_options.add_argument(f'--proxy-server=http://{current_proxy}')
+
+                driver = webdriver.Chrome(options=chrome_options)
+                driver.set_page_load_timeout(90) 
+
+                self.log("   [VTV] Đang truy cập VTVGo lấy Dữ liệu Kênh...")
                 try:
-                    state_json = json.loads(match.group(1))
-                    groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
+                    driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
+                    time.sleep(3) 
                     
-                    for group in groups:
-                        group_name = group.get('name', 'Khác')
-                        gn_lower = group_name.lower()
-                        
-                        if 'vtv' in gn_lower or 'sctv' in gn_lower or 'địa phương' in gn_lower or 'dia phuong' in gn_lower:
-                            if 'vtvcab' in gn_lower: continue
-                            
-                            src_type = 'vtvgo_dynamic' if ('địa phương' in gn_lower or 'dia phuong' in gn_lower) else 'vtvgo_static'
-                            
-                            for c in group.get('channels', []):
-                                slug = c.get('slug', '')
-                                if not slug: slug = self.create_slug(c.get('name'))
-                                master_channels_list.append({
-                                    'id': str(c.get('id')),
-                                    'name': c.get('name'),
-                                    'logo': c.get('logo', ''),
-                                    'group_name': group_name,
-                                    'source': src_type,
-                                    'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
-                                    'm3u8_link': None,
-                                    'error_msg': None,
-                                    'skip': False
-                                })
-                except Exception as e:
-                    self.log(f"Lỗi khi bóc tách JSON VTVGo: {e}")
-
-            self.log("Đang bắt Token chính (VTV/SCTV)...")
-            m3u8_url = None
-            for i in range(30): 
-                logs = driver.get_log('performance')
-                for entry in logs:
                     try:
-                        log_data = json.loads(entry['message'])['message']
-                        if 'Network.requestWillBeSent' in log_data['method']:
-                            req_url = log_data['params']['request']['url']
-                            if '.m3u8' in req_url and 'vtvdigital.vn' in req_url and '/manifest/' in req_url:
-                                m3u8_url = req_url
-                                break
-                    except: continue
-                if m3u8_url: break
-                time.sleep(1)
+                        driver.execute_script("""
+                            var btns = document.getElementsByTagName('button');
+                            for (var i=0; i<btns.length; i++) {
+                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
+                            }
+                            var vids = document.getElementsByTagName('video');
+                            if(vids.length>0) vids[0].play();
+                        """)
+                    except: pass
+                    time.sleep(2)
 
-            if m3u8_url:
-                parts = m3u8_url.split('/')
-                vtv_token, vtv_ts = parts[3], parts[4]
-                self.log(f"✅ Bắt Token VTVGo thành công: {vtv_token[:8]}...")
-            else:
-                self.log("❌ Không bắt được Token VTVGo. Sẽ kích hoạt Fallback để bảo vệ danh sách kênh.")
+                    page_source = driver.page_source
+                    match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
+                    if match:
+                        state_json = json.loads(match.group(1))
+                        groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
+                        
+                        for group in groups:
+                            group_name = group.get('name', 'Khác')
+                            gn_lower = group_name.lower()
+                            if 'vtv' in gn_lower or 'sctv' in gn_lower or 'địa phương' in gn_lower or 'dia phuong' in gn_lower:
+                                if 'vtvcab' in gn_lower: continue
+                                src_type = 'vtvgo_dynamic' if ('địa phương' in gn_lower or 'dia phuong' in gn_lower) else 'vtvgo_static'
+                                for c in group.get('channels', []):
+                                    slug = c.get('slug', '')
+                                    if not slug: slug = self.create_slug(c.get('name'))
+                                    master_channels_list.append({
+                                        'id': str(c.get('id')),
+                                        'name': c.get('name'),
+                                        'logo': c.get('logo', ''),
+                                        'group_name': group_name,
+                                        'source': src_type,
+                                        'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
+                                        'm3u8_link': None,
+                                        'error_msg': None,
+                                        'skip': False
+                                    })
+                except Exception as e:
+                    self.log(f"   [VTV] Lỗi khi bóc tách JSON VTVGo: {e}")
+
+                self.log("   [VTV] Đang bắt Token chính (VTV/SCTV)...")
+                m3u8_url = None
+                for i in range(30): 
+                    logs = driver.get_log('performance')
+                    for entry in logs:
+                        try:
+                            log_data = json.loads(entry['message'])['message']
+                            if 'Network.requestWillBeSent' in log_data['method']:
+                                req_url = log_data['params']['request']['url']
+                                if '.m3u8' in req_url and 'vtvdigital.vn' in req_url and '/manifest/' in req_url:
+                                    m3u8_url = req_url
+                                    break
+                        except: continue
+                    if m3u8_url: break
+                    time.sleep(1)
+
+                if m3u8_url:
+                    parts = m3u8_url.split('/')
+                    vtv_token, vtv_ts = parts[3], parts[4]
+                    self.log(f"   ✅ Lượt {attempt}: Bắt Token VTVGo thành công: {vtv_token[:8]}...")
+                    break # Tới đây là thành công, thoát vòng lặp để chuyển sang TV360
+                else:
+                    self.log(f"   ❌ Lượt {attempt}: Không bắt được Token VTVGo. Đổi Proxy...")
 
             # ==========================================
-            # BƯỚC 2: LẤY DATA TỪ TV360
+            # BƯỚC 2: LẤY DATA TỪ TV360 (Dùng trình duyệt đang mở)
             # ==========================================
-            self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
-            driver.get("https://tv360.vn/tv")
-            
-            for _ in range(8):
-                driver.execute_script("window.scrollBy(0, 800);")
-                time.sleep(1.5)
-                
-            js_extractor_smart = """
-                var results = [];
-                var sections = document.querySelectorAll('.container-section');
-                
-                for (var i = 0; i < sections.length; i++) {
-                    var h2 = sections[i].querySelector('h2');
-                    if (!h2) continue;
-                    var groupName = h2.innerText.trim();
-                    var gnLower = groupName.toLowerCase();
+            self.log("   [TV360] Đang truy cập TV360 lấy Dữ liệu DOM...")
+            try:
+                driver.get("https://tv360.vn/tv")
+                for _ in range(8):
+                    driver.execute_script("window.scrollBy(0, 800);")
+                    time.sleep(1.5)
                     
-                    var targetGroup = "";
-                    if (gnLower.includes("vĩnh long")) targetGroup = "Vĩnh Long";
-                    else if (gnLower.includes("htv")) targetGroup = "HTV";
-                    else if (gnLower.includes("vtv cab")) targetGroup = "VTVCab";
-                    
-                    if (!targetGroup) continue;
+                js_extractor_smart = """
+                    var results = [];
+                    var sections = document.querySelectorAll('.container-section');
+                    for (var i = 0; i < sections.length; i++) {
+                        var h2 = sections[i].querySelector('h2');
+                        if (!h2) continue;
+                        var groupName = h2.innerText.trim();
+                        var gnLower = groupName.toLowerCase();
+                        
+                        var targetGroup = "";
+                        if (gnLower.includes("vĩnh long")) targetGroup = "Vĩnh Long";
+                        else if (gnLower.includes("htv")) targetGroup = "HTV";
+                        else if (gnLower.includes("vtv cab")) targetGroup = "VTVCab";
+                        
+                        if (!targetGroup) continue;
 
-                    var links = sections[i].querySelectorAll('a');
-                    for (var j = 0; j < links.length; j++) {
-                        var href = links[j].href;
-                        if (href.includes('/tv/') && href.includes('ch=')) {
-                            var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
-                            var img = links[j].querySelector('img');
-                            var logo = img ? img.src : '';
-                            
-                            try {
-                                var urlObj = new URL(href);
-                                var id = urlObj.searchParams.get('ch');
-                                var slug = urlObj.pathname.split('/').pop();
-
-                                results.push({
-                                    id: id,
-                                    slug: slug,
-                                    name: name || slug,
-                                    logo: logo,
-                                    group_name: targetGroup,
-                                    link: href
-                                });
-                            } catch(e) {}
+                        var links = sections[i].querySelectorAll('a');
+                        for (var j = 0; j < links.length; j++) {
+                            var href = links[j].href;
+                            if (href.includes('/tv/') && href.includes('ch=')) {
+                                var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
+                                var img = links[j].querySelector('img');
+                                var logo = img ? img.src : '';
+                                try {
+                                    var urlObj = new URL(href);
+                                    var id = urlObj.searchParams.get('ch');
+                                    var slug = urlObj.pathname.split('/').pop();
+                                    results.push({
+                                        id: id, slug: slug, name: name || slug, logo: logo,
+                                        group_name: targetGroup, link: href
+                                    });
+                                } catch(e) {}
+                            }
                         }
                     }
-                }
-                
-                var unique = [];
-                var ids = new Set();
-                for(var ch of results){
-                    if(ch.id && !ids.has(ch.id)){
-                        ids.add(ch.id);
-                        unique.push(ch);
+                    var unique = [];
+                    var ids = new Set();
+                    for(var ch of results){
+                        if(ch.id && !ids.has(ch.id)){ ids.add(ch.id); unique.push(ch); }
                     }
-                }
-                return unique;
-            """
-            
-            tv360_dom_list = driver.execute_script(js_extractor_smart)
-            
-            if tv360_dom_list:
-                for c in tv360_dom_list:
-                    master_channels_list.append({
-                        'id': str(c.get('id')),
-                        'name': c.get('name'),
-                        'logo': c.get('logo', ''),
-                        'group_name': c.get('group_name'),
-                        'source': 'tv360_dynamic',
-                        'url': c.get('link'),
-                        'm3u8_link': None,
-                        'error_msg': None,
-                        'skip': False
-                    })
-                self.log(f"-> Quét DOM TV360 thành công: Lấy {len(tv360_dom_list)} kênh chuẩn.")
+                    return unique;
+                """
+                tv360_dom_list = driver.execute_script(js_extractor_smart)
+                
+                if tv360_dom_list:
+                    for c in tv360_dom_list:
+                        master_channels_list.append({
+                            'id': str(c.get('id')),
+                            'name': c.get('name'),
+                            'logo': c.get('logo', ''),
+                            'group_name': c.get('group_name'),
+                            'source': 'tv360_dynamic',
+                            'url': c.get('link'),
+                            'm3u8_link': None,
+                            'error_msg': None,
+                            'skip': False
+                        })
+                    self.log(f"   -> Quét DOM TV360 thành công: Lấy {len(tv360_dom_list)} kênh chuẩn.")
+            except Exception as e:
+                self.log(f"   [TV360] Lỗi khi cào DOM: {e}")
 
             # ==========================================
-            # LOGIC BẢO VỆ 2: FALLBACK CHO VTV/SCTV NẾU TOKEN LỖI
+            # LOGIC BẢO VỆ 2: FALLBACK CHO VTV/SCTV NẾU TOKEN VẪN LỖI (SAU 2 LƯỢT)
             # ==========================================
             if not vtv_token:
-                self.log("⚠️ Đang chuyển đổi các kênh VTV/SCTV sang chế độ Fallback do không có Token...")
+                self.log("⚠️ Cả 2 lượt đều không bắt được Token VTV. Kích hoạt chế độ FALLBACK cho toàn bộ VTV/SCTV...")
                 for ch in master_channels_list:
                     if ch['source'] == 'vtvgo_static':
                         if ch['name'] in old_links_dict:
@@ -710,7 +722,7 @@ class AllInOneIPTVTool:
             failed_dynamic_channels = []
 
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu LƯỢT 1 (Proxy: {proxy_1_ip}) quét {len(dynamic_channels)} Kênh Dynamic...")
+                self.log(f"⏳ Bắt đầu LƯỢT 1 quét {len(dynamic_channels)} Kênh Dynamic bằng Trình duyệt hiện tại...")
                 for idx, ch in enumerate(dynamic_channels, 1):
                     
                     if ch['source'] == 'vtvgo_dynamic':
@@ -737,7 +749,7 @@ class AllInOneIPTVTool:
                             self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ❌ Lỗi: {status_msg}")
                             failed_dynamic_channels.append(ch)
 
-            driver.quit() # Tắt trình duyệt Proxy 1
+            driver.quit()
 
             # ==========================================
             # BƯỚC 3.2: LƯỢT 2 - CÀO LẠI KÊNH LỖI VỚI PROXY 2
