@@ -25,7 +25,7 @@ except ImportError:
 CONFIG_FILE = "iptv_tool_config.json"
 APP_NAME = "IPTV_AIO_Generator"
 
-# --- CÁC HÀM QUẢN LÝ REGISTRY (KHỞI ĐỘNG CÙNG WIN) ---
+# --- CÁC HÀM QUẢN LÝ REGISTRY ---
 def get_startup_registry_key():
     if not WIN32API_AVAILABLE: return None
     try:
@@ -47,7 +47,6 @@ def add_to_startup():
         else:
             python_interpreter_path = sys.executable
             command = f'"{python_interpreter_path}" "{main_program_path}" --startup'
-            
         win32api.RegSetValueEx(key, APP_NAME, 0, win32con.REG_SZ, command)
         win32api.RegCloseKey(key)
         return True
@@ -86,7 +85,6 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        # FIX LỖI PATH: Sử dụng abspath để os.path.dirname không bị rỗng trên Linux
         if self.headless:
             self.current_path = os.path.abspath("vn.m3u")
         else:
@@ -105,30 +103,25 @@ class AllInOneIPTVTool:
             
             tk.Button(root, text="Chọn Thư Mục", command=self.browse_file).grid(row=0, column=1, sticky="e", padx=10)
 
-            # Buttons
             btn_frame = tk.Frame(root)
             btn_frame.grid(row=1, column=0, columnspan=2, pady=5)
             
             self.btn_manual = tk.Button(btn_frame, text="▶ BẮT ĐẦU QUÉT DATA & XUẤT FILE M3U", command=self.manual_update, bg="#87CEFA", font=("Arial", 11, "bold"), height=2, width=40)
             self.btn_manual.pack(pady=5)
 
-            # Checkbox Khởi động cùng Windows
             self.startup_var = tk.BooleanVar(value=is_in_startup())
             self.chk_startup = tk.Checkbutton(btn_frame, text="Khởi động cùng Windows (Tự động cập nhật ngầm)", variable=self.startup_var, command=self.toggle_startup)
             self.chk_startup.pack(pady=5)
             if not WIN32API_AVAILABLE:
                 self.chk_startup.config(state="disabled", text="Khởi động cùng Windows (Cần cài pywin32)")
 
-            # Log
             tk.Label(root, text="Nhật ký hoạt động:").grid(row=2, column=0, sticky="w", padx=10)
             self.log_area = scrolledtext.ScrolledText(root, width=100, height=16, state='disabled', bg="#1e1e1e", fg="#00ff00", font=("Consolas", 9))
             self.log_area.grid(row=3, column=0, columnspan=2, padx=10, pady=5)
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
-            self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV (Loại bỏ Rạp phim).")
-            self.log("✅ Đã thiết lập: Đa luồng (Multi-threading), Thời gian đợi 12s, Fallback Link cũ.")
-            if is_in_startup():
-                self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
+            self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV.")
+            self.log("✅ Đã thiết lập: Đa luồng (Max 6 Threads), Thời gian đợi 25s, Fallback Link cũ.")
 
     def get_file_path(self):
         if self.headless:
@@ -138,7 +131,8 @@ class AllInOneIPTVTool:
     def log(self, message):
         now = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{now}] {message}"
-        print(formatted_message) # Print ra console (Dùng cho cả Headless)
+        print(formatted_message)
+        sys.stdout.flush() # Ép Python nhả Log ra màn hình GitHub ngay lập tức
         
         if not self.headless and hasattr(self, 'log_area'):
             self.log_area.config(state='normal')
@@ -175,14 +169,13 @@ class AllInOneIPTVTool:
                 self.log("Đã BẬT Khởi động cùng Windows.")
             else:
                 self.startup_var.set(False)
-                messagebox.showerror("Lỗi", "Không thể thêm vào Registry. Hãy thử mở Tool bằng Run as Administrator.")
+                messagebox.showerror("Lỗi", "Không thể thêm vào Registry.")
         else:
             if remove_from_startup():
                 self.log("Đã TẮT Khởi động cùng Windows.")
             else:
                 self.startup_var.set(True)
 
-    # --- HÀM TẠO DRIVER RIÊNG LẺ (CẦN CHO ĐA LUỒNG & CHỐNG TREO LINUX) ---
     def _create_driver(self):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new") 
@@ -193,18 +186,12 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--remote-debugging-port=9222")
-        
-        # FIX LỖI MẤT TOKEN VTV: 
-        # 1. Loại bỏ page_load_strategy = 'eager' để trình duyệt chờ tải xong Video Player.
-        # 2. Thêm User-Agent của Windows thực để VTVGo không chặn Headless/Bot từ máy chủ Mỹ.
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(30)
+        driver.set_page_load_timeout(45) # Chống treo hoàn toàn khi load web quá chậm
         return driver
 
-    # --- HÀM LẤY LINK M3U8 TỪ FILE CŨ (FALLBACK) ---
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -224,7 +211,6 @@ class AllInOneIPTVTool:
         except Exception: pass
         return old_links
 
-    # --- CÁC HÀM XỬ LÝ CHUỖI ---
     def remove_accents(self, input_str):
         s1 = u'ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ'
         s0 = u'AAAAEEEIIOOOOUUYaaaaeeeiioooouuyAaDdIiUuOoUuAaAaAaAaAaAaAaAaAaAaAaAaEeEeEeEeEeEeEeEeIiIiOoOoOoOoOoOoOoOoOoOoOoOoUuUuUuUuUuUuUuYyYyYyYy'
@@ -249,7 +235,6 @@ class AllInOneIPTVTool:
         text = re.sub(r'\s+', '-', text).strip('-')
         return text
 
-    # --- HÀM BẮT M3U8 VTVGO ---
     def catch_m3u8_vtvgo(self, driver, url):
         try:
             driver.get_log('performance') 
@@ -266,7 +251,7 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for _ in range(12): 
+            for _ in range(25): # Tăng lên 25s cho Server Mỹ
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -278,11 +263,10 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 12s"
+            return None, "Timeout 25s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # --- HÀM BẮT M3U8 TV360 ---
     def catch_m3u8_tv360(self, driver, url):
         try:
             driver.get_log('performance') 
@@ -297,7 +281,7 @@ class AllInOneIPTVTool:
                 driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for _ in range(12): 
+            for _ in range(25): # Tăng lên 25s cho Server Mỹ
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -309,11 +293,10 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 12s"
+            return None, "Timeout 25s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # --- QUY TRÌNH QUÉT CHÍNH ---
     def extract_all_data(self):
         self.save_settings() 
         old_links_dict = self.load_old_m3u_links()
@@ -326,7 +309,6 @@ class AllInOneIPTVTool:
             self.log("Đang khởi động trình duyệt để lấy cấu trúc kênh...")
             main_driver = self._create_driver()
 
-            # --- BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO ---
             self.log("Đang truy cập VTVGo lấy Dữ liệu Kênh...")
             main_driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
             time.sleep(3) 
@@ -372,11 +354,10 @@ class AllInOneIPTVTool:
                 except Exception as e:
                     self.log(f"Lỗi khi bóc tách JSON VTVGo: {e}")
 
-            self.log("Đang bắt Token chính (VTV/SCTV)...")
+            self.log("Đang bắt Token chính (VTV/SCTV)... Chờ tối đa 25s...")
             m3u8_url = None
             
-            # Khôi phục nguyên trạng logic chờ của code gốc
-            for i in range(15):
+            for i in range(25): # Tăng lên 25s để chống tịt Token
                 logs = main_driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -395,9 +376,8 @@ class AllInOneIPTVTool:
                 vtv_token, vtv_ts = parts[3], parts[4]
                 self.log(f"✅ Bắt Token VTVGo thành công: {vtv_token[:8]}...")
             else:
-                self.log("❌ Không bắt được Token VTVGo.")
+                self.log("❌ Không bắt được Token VTVGo. Các kênh VTV tĩnh sẽ không có link.")
 
-            # --- BƯỚC 2: LẤY DATA TỪ TV360 ---
             self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
             main_driver.get("https://tv360.vn/tv")
             for _ in range(8):
@@ -455,11 +435,10 @@ class AllInOneIPTVTool:
             main_driver.quit()
             main_driver = None
 
-            # --- BƯỚC 3: DEEP SCAN M3U8 ĐA LUỒNG ---
             dynamic_channels = [ch for ch in master_channels_list if ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic')]
             
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 3 Threads) cho {len(dynamic_channels)} Kênh...")
+                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 6 Threads) cho {len(dynamic_channels)} Kênh...")
                 
                 def process_channel_worker(ch):
                     worker_driver = self._create_driver()
@@ -493,8 +472,11 @@ class AllInOneIPTVTool:
                     finally:
                         worker_driver.quit()
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                    executor.map(process_channel_worker, dynamic_channels)
+                # Tối ưu nhả Log thời gian thực bằng as_completed
+                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                    futures = [executor.submit(process_channel_worker, ch) for ch in dynamic_channels]
+                    for future in concurrent.futures.as_completed(futures):
+                        pass
 
             return vtv_token, vtv_ts, master_channels_list
 
@@ -503,7 +485,6 @@ class AllInOneIPTVTool:
             if main_driver: main_driver.quit()
             return None, None, None
 
-    # --- TẠO FILE M3U TỪ DANH SÁCH TỔNG ---
     def generate_m3u(self, vtv_token, vtv_ts, master_channels_list):
         for ch in master_channels_list:
             ch_name_lower = ch['name'].lower()
