@@ -86,8 +86,9 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
+        # FIX LỖI PATH: Sử dụng abspath để os.path.dirname không bị rỗng trên Linux
         if self.headless:
-            self.current_path = "vn.m3u"
+            self.current_path = os.path.abspath("vn.m3u")
         else:
             self.current_path = self.settings.get("path", "D:\\Tool\\vn.m3u")
 
@@ -125,7 +126,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV (Loại bỏ Rạp phim).")
-            self.log("✅ Đã thiết lập: Thời gian đợi 12s, Fallback Link cũ & Check Premium.")
+            self.log("✅ Đã thiết lập: Đa luồng (Multi-threading), Thời gian đợi 12s, Fallback Link cũ.")
             if is_in_startup():
                 self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
 
@@ -181,7 +182,7 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
-    # --- HÀM TẠO DRIVER RIÊNG LẺ (CẦN CHO ĐA LUỒNG) ---
+    # --- HÀM TẠO DRIVER RIÊNG LẺ (CẦN CHO ĐA LUỒNG & CHỐNG TREO LINUX) ---
     def _create_driver(self):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new") 
@@ -260,7 +261,7 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for _ in range(12): # Giảm wait xuống 12s để tăng tốc
+            for _ in range(12): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -291,7 +292,7 @@ class AllInOneIPTVTool:
                 driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for _ in range(12): # Giảm wait xuống 12s để tăng tốc
+            for _ in range(12): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -444,7 +445,6 @@ class AllInOneIPTVTool:
             else:
                 self.log("❌ Không quét được kênh nào từ DOM TV360.")
 
-            # Tắt trình duyệt chính đi để nhường RAM cho các luồng Worker quét ngầm
             main_driver.quit()
             main_driver = None
 
@@ -454,7 +454,6 @@ class AllInOneIPTVTool:
             if dynamic_channels:
                 self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 3 Threads) cho {len(dynamic_channels)} Kênh...")
                 
-                # Hàm thực thi cho từng luồng
                 def process_channel_worker(ch):
                     worker_driver = self._create_driver()
                     try:
@@ -487,7 +486,6 @@ class AllInOneIPTVTool:
                     finally:
                         worker_driver.quit()
 
-                # Khởi chạy 3 luồng cùng lúc
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                     executor.map(process_channel_worker, dynamic_channels)
 
