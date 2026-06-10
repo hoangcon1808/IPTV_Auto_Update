@@ -2,7 +2,7 @@ name: Tự Động Cập Nhật M3U (1 Giờ/Lần)
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '47 * * * *'
   workflow_dispatch:
 
 jobs:
