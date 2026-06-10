@@ -7,7 +7,8 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # CHUYỂN SANG CHẠY TRÊN MÁY CHỦ WINDOWS NHƯ YÊU CẦU
+    runs-on: windows-latest
 
     steps:
     - name: Checkout Code
@@ -20,16 +21,14 @@ jobs:
 
     - name: Cài đặt thư viện cần thiết
       run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-tk
         python -m pip install --upgrade pip
         pip install selenium
 
-    - name: Chạy Tool Cào Data
-      # Thêm cờ -u để ép Python hiển thị tiến trình (log) ra màn hình theo thời gian thực
+    - name: Chạy Tool Cào Data (Debug Mode)
       run: python -u "m3u link.py" --startup
 
     - name: Lưu đè file vn.m3u lên GitHub
+      shell: bash
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
