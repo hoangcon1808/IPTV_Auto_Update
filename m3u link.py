@@ -394,14 +394,13 @@ class AllInOneIPTVTool:
                     success_count += 1
                 except Exception:
                     pass 
-                time.sleep(0.5) # Nghỉ 0.5s giữa các lần ping
+                time.sleep(0.5) 
             
             if success_count > 0:
                 avg_ping = total_ping / success_count
                 return (success_count, avg_ping, ip, source)
             return None
 
-        # Tăng số luồng lên 30 do lượng IP tổng hợp lớn
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = [executor.submit(ping_target_web, ip, source) for ip, source in unique_proxies.items()]
             for future in concurrent.futures.as_completed(futures):
@@ -414,12 +413,10 @@ class AllInOneIPTVTool:
             return None
 
         # BƯỚC 2: Phân loại Proxy thành 2 Vòng lựa chọn (Tier 1 & Tier 2) và Check IP Việt Nam
-        # Tier 1 (Hoàn hảo): Sống đủ 3/3 lần ping
-        # Tier 2 (Dự phòng): Sống 1 hoặc 2 lần ping
         tier1 = [p for p in working_proxies if p[0] == 3]
         tier2 = [p for p in working_proxies if p[0] < 3]
         
-        tier1.sort(key=lambda x: x[1]) # Xếp theo tốc độ ping trung bình
+        tier1.sort(key=lambda x: x[1]) 
         tier2.sort(key=lambda x: x[1])
         
         self.log(f"   [Proxy] Lọc được {len(tier1)} IP (Sống 3/3 lần) và {len(tier2)} IP (Sống 1-2 lần). Bắt đầu check IP VN...")
@@ -429,23 +426,27 @@ class AllInOneIPTVTool:
                 try:
                     proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
                     opener = urllib.request.build_opener(proxy_handler)
-                    # Sử dụng GeoJS API siêu mượt, chống chặn
-                    check_req = urllib.request.Request("https://get.geojs.io/v1/ip/country.json", headers={'User-Agent': 'Mozilla/5.0'})
+                    # Sử dụng ipwho.is, không chặn rate limit, trả kết quả ổn định
+                    check_req = urllib.request.Request("http://ipwho.is/", headers={'User-Agent': 'Mozilla/5.0'})
                     check_res = opener.open(check_req, timeout=5)
                     geo_data = json.loads(check_res.read().decode('utf-8'))
                     
-                    if geo_data.get("country") == "VN":
+                    country_code = geo_data.get("country_code", "UNKNOWN")
+                    returned_ip = geo_data.get("ip", "UNKNOWN")
+                    
+                    self.log(f"      [Debug Geo] Test IP {ip} -> Phản hồi IP: {returned_ip} | Mã QG: {country_code}")
+                    
+                    if country_code == "VN":
                         self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN [{tier_name}]: {ip} (Ping: {ping_time:.2f}s, Pass: {success_count}/3) - Nguồn: [{source}]")
                         return ip
-                except Exception:
+                except Exception as e:
+                    self.log(f"      [Debug Geo] Test IP {ip} -> Lỗi gọi API Geo: {str(e)[:30]}")
                     pass
-                time.sleep(0.2)
+                time.sleep(0.5)
             return None
 
-        # Ưu tiên lấy Tier 1 trước
         best_ip = check_vn_ip(tier1, "Hoàn hảo")
         
-        # Nếu Tier 1 không có VN IP nào, chuyển sang Tier 2
         if not best_ip and tier2:
             self.log(f"   [Proxy] ⚠️ Nhóm Hoàn Hảo không có IP VN. Chuyển sang tìm ở nhóm Dự phòng...")
             best_ip = check_vn_ip(tier2, "Dự phòng")
@@ -602,6 +603,7 @@ class AllInOneIPTVTool:
                                     'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
                                     'm3u8_link': None, 'error_msg': None, 'skip': False
                                 })
+                self.log(f"   -> Lượt 1: DOM VTV lấy được {len(vtv_channels)} kênh.")
             except: pass
 
             self.log("   [VTV] Tiến hành cào Link M3U8 gốc qua VTV1...")
@@ -688,15 +690,9 @@ class AllInOneIPTVTool:
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
                         // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC NHẤT: 
-                        // Kênh VIP luôn chứa một thẻ con có class CSS đặc trưng '.css-1hssde8'
-                        // (Hoặc fallback kiểm tra file ảnh cbac622c276c.png)
+                        // Dựa vào DOM phân tích, kênh VIP luôn chứa thẻ div con có class css-1hssde8
                         if (links[j].querySelector('.css-1hssde8')) {
                             continue; // Bỏ qua kênh thu phí
-                        }
-                        
-                        var innerHTML = links[j].innerHTML.toLowerCase();
-                        if (innerHTML.includes('cbac622c276c.png')) {
-                            continue; // Dự phòng check chuỗi icon VIP
                         }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
