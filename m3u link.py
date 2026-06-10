@@ -7,6 +7,7 @@ import os
 import json
 import re
 import urllib.request
+import concurrent.futures  # THƯ VIỆN MỚI: CHO PHÉP XỬ LÝ ĐA LUỒNG
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -134,7 +135,7 @@ class AllInOneIPTVTool:
             self.log_area.grid(row=3, column=0, columnspan=2, padx=10, pady=5)
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
-            self.log("✅ Chế độ: NGUYÊN BẢN, Cào 2 Lớp, Tách VTV & TV360, Test Tốc Độ Tải.")
+            self.log("✅ Chế độ: Đa Luồng (Multi-threading), Đo Băng Thông 50KB, Tách VTV & TV360.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT.")
             if is_in_startup():
@@ -209,7 +210,7 @@ class AllInOneIPTVTool:
         return driver
 
     # ========================================================
-    # SỬA: ĐO TỐC ĐỘ TẢI DATA THỰC TẾ (THROUGHPUT TEST) THAY VÌ PING
+    # SỬA: ĐA LUỒNG (MULTI-THREADING) & ĐO BĂNG THÔNG 50KB
     # ========================================================
     def _find_best_proxy(self, target_name="vtv", exclude_ip=None):
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO DANH SÁCH PROXY MỚI ĐỂ PHỤC VỤ {target_name.upper()}...")
@@ -294,47 +295,49 @@ class AllInOneIPTVTool:
             return None
 
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu test TỐC ĐỘ TẢI (10KB) từ {target_url}...")
+        self.log(f"   [Proxy] Gom được {len(unique_proxies)} IPs. Kích hoạt ĐA LUỒNG Test Tốc Độ Tải (50KB) từ {target_url}...")
 
         working_proxies = []
-        for ip, source in unique_proxies.items():
-            if ip == exclude_ip: 
-                continue
-            
+        lock = threading.Lock()
+
+        def test_single_proxy(ip, source):
+            if ip == exclude_ip: return
             try:
                 proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
                 opener = urllib.request.build_opener(proxy_handler)
                 
-                # Check 1: VN IP
+                # Check VN IP
                 check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
                 check_res = opener.open(check_req, timeout=2) 
                 geo_data = json.loads(check_res.read().decode('utf-8'))
                 
                 if geo_data.get("countryCode") == "VN":
-                    # Check 2: THROUGHPUT TEST (Tải 10KB dữ liệu thực tế)
+                    # THROUGHPUT TEST (Tải 50KB dữ liệu thực tế)
                     start_time = time.time()
                     req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    response = opener.open(req, timeout=5) # Cho phép 5s để vừa mở kết nối vừa tải
+                    response = opener.open(req, timeout=5) 
                     
-                    # Ép Proxy thực sự kéo data về. Nếu mạng yếu, nó sẽ kẹt ở đây và văng lỗi Timeout
-                    chunk = response.read(10240) 
+                    chunk = response.read(51200) # Đã nâng lên 50KB
                     
-                    if len(chunk) > 100: # Đảm bảo tải thành công nội dung
+                    if len(chunk) > 100: 
                         load_time = time.time() - start_time
-                        working_proxies.append((load_time, ip, source))
-                        # Bật log này lên nếu bạn muốn xem tốc độ tải của từng con proxy
-                        # self.log(f"      [Debug] [{source}] {ip} -> Tải 10KB mất: {load_time:.2f}s") 
+                        with lock:
+                            working_proxies.append((load_time, ip, source))
             except Exception:
                 pass 
 
+        # THỰC THI ĐA LUỒNG TỐI ĐA 15 LUỒNG CÙNG LÚC
+        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+            futures = [executor.submit(test_single_proxy, ip, source) for ip, source in unique_proxies.items()]
+            concurrent.futures.wait(futures)
+
         if working_proxies:
-            # Ưu tiên con nào load xong 10KB nhanh nhất
             working_proxies.sort(key=lambda x: x[0])
             best = working_proxies[0]
-            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Tốc độ tải: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
+            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Tốc độ kéo 50KB: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
             return best[1]
         else:
-            self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết mạng hoặc quá yếu khi tải {target_name.upper()}.")
+            self.log(f"   [Proxy] ❌ Toàn bộ Proxy đều chết mạng hoặc vỡ kết nối khi ép tải 50KB từ {target_name.upper()}.")
             return None
 
     # ========================================================
