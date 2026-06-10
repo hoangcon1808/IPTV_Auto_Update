@@ -7,7 +7,6 @@ import os
 import json
 import re
 import urllib.request
-import concurrent.futures
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -225,7 +224,7 @@ class AllInOneIPTVTool:
                     if p.strip():
                         proxy_pool.append({'ip': p.strip(), 'source': 'API_ProxyScrape'})
                         count += 1
-            self.log(f"      [Debug] Nguồn 1 (API ProxyScrape): {count} IPs.")
+            self.log(f"      [Scrape] Nguồn 1 (API ProxyScrape): {count} IPs.")
         except: pass
 
         try:
@@ -238,7 +237,7 @@ class AllInOneIPTVTool:
                 if item.get('ip') and item.get('port'):
                     proxy_pool.append({'ip': f"{item['ip']}:{item['port']}", 'source': 'API_Geonode'})
                     count += 1
-            self.log(f"      [Debug] Nguồn 2 (API Geonode): {count} IPs.")
+            self.log(f"      [Scrape] Nguồn 2 (API Geonode): {count} IPs.")
         except: pass
 
         try:
@@ -252,7 +251,7 @@ class AllInOneIPTVTool:
                     if p.strip():
                         proxy_pool.append({'ip': p.strip(), 'source': 'API_ProxyListDownload'})
                         count += 1
-            self.log(f"      [Debug] Nguồn 5 (Proxy-List.download): {count} IPs.")
+            self.log(f"      [Scrape] Nguồn 5 (Proxy-List.download): {count} IPs.")
         except: pass
 
         try:
@@ -269,7 +268,7 @@ class AllInOneIPTVTool:
                         proxy_pool.append({'ip': ip_port, 'source': 'API_FateZero'})
                         count += 1
                 except: continue
-            self.log(f"      [Debug] Nguồn 6 (FateZero): {count} IPs.")
+            self.log(f"      [Scrape] Nguồn 6 (FateZero): {count} IPs.")
         except: pass
 
         try:
@@ -284,7 +283,7 @@ class AllInOneIPTVTool:
                     if match:
                         proxy_pool.append({'ip': match.group(1), 'source': 'API_SpysMe'})
                         count += 1
-            self.log(f"      [Debug] Nguồn mới (Spys.me): {count} IPs.")
+            self.log(f"      [Scrape] Nguồn mới (Spys.me): {count} IPs.")
         except: pass
 
         # --- NGUỒN CÀO QUA WEB SELENIUM ---
@@ -303,7 +302,7 @@ class AllInOneIPTVTool:
                         if match:
                             proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxy'})
                             count += 1
-                self.log(f"      [Debug] Nguồn 3 (Free-Proxy-List): {count} IPs.")
+                self.log(f"      [Scrape] Nguồn 3 (Free-Proxy-List): {count} IPs.")
             except: pass
 
             try:
@@ -324,7 +323,7 @@ class AllInOneIPTVTool:
                     for ip_port in matches:
                         proxy_pool.append({'ip': ip_port, 'source': 'WEB_SpysOne'})
                         count += 1
-                self.log(f"      [Debug] Nguồn 4 (Spys.one): {count} IPs.")
+                self.log(f"      [Scrape] Nguồn 4 (Spys.one): {count} IPs.")
             except: pass
 
             try:
@@ -351,7 +350,7 @@ class AllInOneIPTVTool:
                     for ip_port in matches:
                         proxy_pool.append({'ip': ip_port, 'source': 'WEB_ProxyNova'})
                         count += 1
-                self.log(f"      [Debug] Nguồn 8 (ProxyNova): {count} IPs.")
+                self.log(f"      [Scrape] Nguồn 8 (ProxyNova): {count} IPs.")
             except: pass
 
         except: pass
@@ -365,109 +364,98 @@ class AllInOneIPTVTool:
                 unique_proxies[p['ip']] = p['source']
 
         if not unique_proxies:
-            self.log(f"   [Proxy] ❌ Không cào được danh sách mới nào cho {target_name.upper()}.")
+            self.log(f"   [Proxy] ❌ Không cào được danh sách Proxy thô nào.")
             return None
 
-        target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        
         # ========================================================
-        # KIẾN TRÚC MỚI: PING NHÁP ĐA LUỒNG -> TEST KỸ ĐƠN LUỒNG
+        # KIẾN TRÚC MỚI: KIỂM TRA TUẦN TỰ (Single-Thread)
         # ========================================================
-        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. BƯỚC 1: Quét Đa luồng lọc IP chết hẳn...")
-
-        alive_ips = []
-        source_map = unique_proxies 
+        self.log(f"   [Proxy] Gom được {len(unique_proxies)} IP thô. Bắt đầu bộ lọc 3 BƯỚC...")
         
-        def fast_alive_check(ip):
-            if ip == exclude_ip: return None
+        # BƯỚC 1: Lọc Quốc Gia (Trực tiếp từ Local, không dùng Proxy để chống Timeout)
+        self.log("   [Proxy] BƯỚC 1: Gọi GeoJS xác minh IP Việt Nam...")
+        vn_proxies = {}
+        for ip_port, source in unique_proxies.items():
+            if ip_port == exclude_ip: continue
+            ip_only = ip_port.split(':')[0]
             try:
-                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
-                opener = urllib.request.build_opener(proxy_handler)
-                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                opener.open(req, timeout=8) 
-                return ip
+                url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                res = urllib.request.urlopen(req, timeout=3)
+                geo_data = json.loads(res.read().decode('utf-8'))
+                
+                if geo_data.get("country") == "VN":
+                    vn_proxies[ip_port] = source
             except:
-                return None
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-            futures = {executor.submit(fast_alive_check, ip): ip for ip in unique_proxies.keys()}
-            for future in concurrent.futures.as_completed(futures):
-                res = future.result()
-                if res:
-                    alive_ips.append(res)
-                    
-        if not alive_ips:
-            self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết ngắc ở bước lọc nhanh (0/{len(unique_proxies)} sống).")
-            return None
+                pass
+            time.sleep(0.1) # Nghỉ nhẹ để GeoJS không block API
             
-        self.log(f"   [Proxy] Qua vòng gửi xe được {len(alive_ips)} IP. BƯỚC 2: Test Đơn luồng đo độ ổn định (3 lượt/IP)...")
+        if not vn_proxies:
+            self.log("   [Proxy] ❌ Tất cả IP cào được đều là IP Nước ngoài hoặc lỗi check Geo.")
+            return None
+        self.log(f"      -> Chắt lọc được {len(vn_proxies)} IP chuẩn Việt Nam.")
 
+        # BƯỚC 2: Ping Nháp Đơn Luồng (Check Sống/Chết - Timeout 10s)
+        self.log("   [Proxy] BƯỚC 2: Ping nháp kiểm tra mạng (Timeout 10s/IP)...")
+        raw_alive_proxies = {}
+        # Dùng server của google (trả về 204 No Content) để test xem proxy có internet không cực nhanh
+        test_ping_url = "http://clients3.google.com/generate_204" 
+        
+        for ip_port, source in vn_proxies.items():
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
+                opener = urllib.request.build_opener(proxy_handler)
+                req = urllib.request.Request(test_ping_url, headers={'User-Agent': 'Mozilla/5.0'})
+                opener.open(req, timeout=10)
+                raw_alive_proxies[ip_port] = source
+                self.log(f"      [Nháp] ✅ {ip_port} -> SỐNG")
+            except:
+                pass # Bỏ qua ip chết
+                
+        if not raw_alive_proxies:
+            self.log("   [Proxy] ❌ Toàn bộ IP Việt Nam đều chết nghẻo khi ping.")
+            return None
+
+        # BƯỚC 3: Ping Sâu Đơn Luồng (3 Lượt vào Web Đích)
+        target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
+        self.log(f"   [Proxy] BƯỚC 3: Test chuyên sâu 3 lần tới {target_url} cho {len(raw_alive_proxies)} IP...")
+        
         working_proxies = []
-        for ip in alive_ips:
+        for ip_port, source in raw_alive_proxies.items():
             success_count = 0
             total_ping = 0
-            proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+            
+            proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
             opener = urllib.request.build_opener(proxy_handler)
             req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
             
-            for _ in range(3):
+            for i in range(1, 4):
                 try:
                     start_time = time.time()
                     opener.open(req, timeout=10)
-                    total_ping += (time.time() - start_time)
+                    ping_time = time.time() - start_time
+                    total_ping += ping_time
                     success_count += 1
+                    self.log(f"      [Test {i}/3] {ip_port} -> {ping_time:.2f}s")
                 except:
-                    pass
+                    self.log(f"      [Test {i}/3] {ip_port} -> Lỗi/Timeout")
                 time.sleep(0.5) 
                 
             if success_count > 0:
                 avg_ping = total_ping / success_count
-                working_proxies.append((success_count, avg_ping, ip, source_map[ip]))
-
-        # Phân loại Tier
-        tier1 = [p for p in working_proxies if p[0] == 3]
-        tier2 = [p for p in working_proxies if p[0] < 3]
-        
-        tier1.sort(key=lambda x: x[1]) 
-        tier2.sort(key=lambda x: x[1])
-        
-        self.log(f"   [Proxy] Lọc được {len(tier1)} IP (Nhóm Hoàn hảo) và {len(tier2)} IP (Nhóm Dự phòng). Bắt đầu check IP VN...")
-
-        def check_vn_ip(proxy_list, tier_name):
-            for success_count, ping_time, ip_port, source in proxy_list:
-                try:
-                    ip_only = ip_port.split(':')[0]
-                    # Check trực tiếp từ máy chủ Local (Không qua proxy) để chống timeout lỗi Geo
-                    url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
-                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                    res = urllib.request.urlopen(req, timeout=5)
-                    geo_data = json.loads(res.read().decode('utf-8'))
-                    
-                    country_code = geo_data.get("country", "UNKNOWN")
-                    self.log(f"      [Debug Geo] Tra cứu IP {ip_only} -> Mã QG: {country_code}")
-                    
-                    if country_code == "VN":
-                        self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN [{tier_name}]: {ip_port} (Ping: {ping_time:.2f}s, Pass: {success_count}/3) - Nguồn: [{source}]")
-                        return ip_port
-                except Exception as e:
-                    self.log(f"      [Debug Geo] Lỗi tra cứu IP {ip_port}: {str(e)[:30]}")
-                    pass
-                time.sleep(0.2)
+                working_proxies.append((success_count, avg_ping, ip_port, source))
+                
+        if not working_proxies:
+            self.log(f"   [Proxy] ❌ Các Proxy tuy có mạng nhưng đều bị chặn/timeout khi vào {target_name.upper()}.")
             return None
 
-        # Vòng 1: Tìm trong Nhóm Hoàn hảo
-        best_ip = check_vn_ip(tier1, "Hoàn hảo")
+        # Sắp xếp: Ưu tiên Pass nhiều lần nhất (3 -> 2 -> 1), sau đó ưu tiên Ping thấp nhất
+        working_proxies.sort(key=lambda x: (-x[0], x[1]))
+        best_proxy = working_proxies[0]
         
-        # Vòng 2: Nếu Vòng 1 không có, quét vớt Nhóm Dự phòng
-        if not best_ip and tier2:
-            self.log(f"   [Proxy] ⚠️ Nhóm Hoàn Hảo không có IP VN. Chuyển sang tìm ở nhóm Dự phòng...")
-            best_ip = check_vn_ip(tier2, "Dự phòng")
+        self.log(f"   [Proxy] ✅ {target_name.upper()} CHỐT HẠ IP TỐT NHẤT: {best_proxy[2]} (Sống {best_proxy[0]}/3 lần, Ping TB: {best_proxy[1]:.2f}s) - Nguồn: [{best_proxy[3]}]")
+        return best_proxy[2]
 
-        if best_ip:
-            return best_ip
-        else:
-            self.log(f"   [Proxy] ❌ Không tìm thấy IP nào thuộc Việt Nam trong số các Proxy còn sống.")
-            return None
 
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
@@ -747,7 +735,7 @@ class AllInOneIPTVTool:
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
                         // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC NHẤT: 
-                        // Kênh VIP luôn chứa một thẻ con có class CSS đặc trưng '.css-1hssde8'
+                        // Dựa vào DOM phân tích, kênh VIP luôn chứa thẻ div con có class css-1hssde8
                         if (links[j].querySelector('.css-1hssde8')) {
                             continue; 
                         }
