@@ -214,36 +214,165 @@ class AllInOneIPTVTool:
         return self._create_driver(proxy_ip)
 
     # ========================================================
-    # KIẾN TRÚC MỚI: QUÉT PROXY TUẦN TỰ (CHỈ CHECK 1 LẦN, EARLY EXIT <2S)
+    # KIẾN TRÚC MỚI: QUÉT PROXY TỪ 8 NGUỒN (API + WEB) -> CHECK SINGLE THREAD
     # ========================================================
     def _find_best_proxy(self, target_name="vtv"):
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO VÀ TÌM PROXY TỐT NHẤT CHO {target_name.upper()}...")
         proxy_pool = []
 
-        # --- GOM IP TỪ API ---
-        sources = [
-            ("API ProxyScrape", "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"),
-            ("API ProxyList.Download", "https://www.proxy-list.download/api/v1/get?type=http&country=VN"),
-            ("API FateZero", "https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list"),
-            ("API Spys.me", "https://spys.me/proxy.txt")
-        ]
-        
-        for name, url in sources:
-            try:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                res = urllib.request.urlopen(req, timeout=10)
-                data = res.read().decode('utf-8')
-                count = 0
-                for line in data.split('\n'):
-                    # Tìm định dạng IP:Port
-                    match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3}:\d+)', line)
-                    if match:
-                        proxy_pool.append({'ip': match.group(1), 'source': name})
+        # --- NGUỒN 1: API ProxyScrape ---
+        try:
+            url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = res.read().decode('utf-8').strip()
+            count = 0
+            if data:
+                for p in data.split('\r\n'):
+                    if p.strip():
+                        proxy_pool.append({'ip': p.strip(), 'source': 'API ProxyScrape'})
                         count += 1
-                self.log(f"      [Scrape] {name}: {count} IPs.")
+            self.log(f"      [Scrape] Nguồn 1 (API ProxyScrape): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN 2: API Geonode ---
+        try:
+            url = "https://proxylist.geonode.com/api/proxy-list?country=VN&protocols=http%2Chttps&limit=50&page=1&sort_by=lastChecked&sort_type=desc"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = json.loads(res.read().decode('utf-8'))
+            count = 0
+            for item in data.get('data', []):
+                if item.get('ip') and item.get('port'):
+                    proxy_pool.append({'ip': f"{item['ip']}:{item['port']}", 'source': 'API Geonode'})
+                    count += 1
+            self.log(f"      [Scrape] Nguồn 2 (API Geonode): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN 3: API ProxyList.Download ---
+        try:
+            url = "https://www.proxy-list.download/api/v1/get?type=http&country=VN"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = res.read().decode('utf-8').strip()
+            count = 0
+            if data:
+                for p in data.split('\r\n'):
+                    if p.strip():
+                        proxy_pool.append({'ip': p.strip(), 'source': 'API Proxy-List.download'})
+                        count += 1
+            self.log(f"      [Scrape] Nguồn 3 (API ProxyList.Download): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN 4: API FateZero ---
+        try:
+            url = "https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            lines = res.read().decode('utf-8').strip().split('\n')
+            count = 0
+            for line in lines:
+                try:
+                    p_data = json.loads(line)
+                    if p_data.get("country") == "VN" and p_data.get("type") == "http":
+                        ip_port = f"{p_data['host']}:{p_data['port']}"
+                        proxy_pool.append({'ip': ip_port, 'source': 'API FateZero'})
+                        count += 1
+                except: continue
+            self.log(f"      [Scrape] Nguồn 4 (API FateZero): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN 5: API Spys.me ---
+        try:
+            url = "https://spys.me/proxy.txt"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = res.read().decode('utf-8')
+            count = 0
+            for line in data.split('\n'):
+                if 'VN' in line:
+                    match = re.search(r'^(\d{1,3}(?:\.\d{1,3}){3}:\d+)', line)
+                    if match:
+                        proxy_pool.append({'ip': match.group(1), 'source': 'API Spys.me'})
+                        count += 1
+            self.log(f"      [Scrape] Nguồn 5 (API Spys.me): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN 6,7,8: CÀO QUA WEB SELENIUM ---
+        driver = None
+        try:
+            driver = self._create_driver() 
+            
+            # --- NGUỒN 6: Free-Proxy-List.net ---
+            try:
+                driver.get("https://free-proxy-list.net/")
+                time.sleep(1)
+                table_text = driver.find_element("tag name", "tbody").text
+                count = 0
+                for line in table_text.split('\n'):
+                    if " VN " in line or "Vietnam" in line:
+                        match = re.search(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)(?!\d)', line)
+                        if match:
+                            proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB FreeProxy'})
+                            count += 1
+                self.log(f"      [Scrape] Nguồn 6 (WEB FreeProxy): {count} IPs.")
             except: pass
 
-        # Loại bỏ trùng lặp
+            # --- NGUỒN 7: Spys.one ---
+            try:
+                driver.get("https://spys.one/free-proxy-list/VN/")
+                WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
+                js_extract = """
+                    var results = [];
+                    var elements = document.querySelectorAll('font.spy14');
+                    for(var i=0; i<elements.length; i++) {
+                        var txt = elements[i].innerText.trim();
+                        if(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(txt)) results.push(txt);
+                    }
+                    return results;
+                """
+                matches = driver.execute_script(js_extract)
+                count = 0
+                if matches:
+                    for ip_port in matches:
+                        proxy_pool.append({'ip': ip_port, 'source': 'WEB SpysOne'})
+                        count += 1
+                self.log(f"      [Scrape] Nguồn 7 (WEB SpysOne): {count} IPs.")
+            except: pass
+
+            # --- NGUỒN 8: ProxyNova ---
+            try:
+                driver.get("https://www.proxynova.com/proxy-server-list/country-vn/")
+                time.sleep(3)
+                js_extract_nova = """
+                    var results = [];
+                    var rows = document.querySelectorAll('#tbl_proxy_list tbody tr');
+                    for(var i=0; i<rows.length; i++) {
+                        if (!rows[i].hasAttribute('data-proxy-id')) continue;
+                        var ipTd = rows[i].querySelector('td:nth-child(1)');
+                        var portTd = rows[i].querySelector('td:nth-child(2)');
+                        if(ipTd && portTd) {
+                            var ipText = ipTd.innerText.replace(/[^0-9\.]/g, '').trim();
+                            var portText = portTd.innerText.trim();
+                            if(ipText && portText) results.push(ipText + ':' + portText);
+                        }
+                    }
+                    return results;
+                """
+                matches = driver.execute_script(js_extract_nova)
+                count = 0
+                if matches:
+                    for ip_port in matches:
+                        proxy_pool.append({'ip': ip_port, 'source': 'WEB ProxyNova'})
+                        count += 1
+                self.log(f"      [Scrape] Nguồn 8 (WEB ProxyNova): {count} IPs.")
+            except: pass
+
+        except: pass
+        finally:
+            if driver: driver.quit()
+
+        # Loại bỏ các IP trùng lặp
         unique_proxies = []
         seen = set()
         for p in proxy_pool:
@@ -255,9 +384,9 @@ class AllInOneIPTVTool:
             self.log(f"   [Proxy] ❌ Không cào được danh sách Proxy thô nào.")
             return None
 
-        # --- KIỂM TRA ĐƠN LUỒNG ---
+        # --- KIỂM TRA ĐƠN LUỒNG & CHỐT HẠ ---
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu Ping (Timeout 10s)...")
+        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu Test (Timeout 10s)...")
         
         valid_proxies = []
         for p in unique_proxies:
@@ -272,8 +401,8 @@ class AllInOneIPTVTool:
                 start_time = time.time()
                 opener.open(req, timeout=10)
                 ping_time = time.time() - start_time
-            except Exception as e:
-                continue # Nếu sập hoặc quá 10s -> Vứt luôn, sang IP tiếp theo
+            except Exception:
+                continue # Nếu sập hoặc quá 10s -> Bỏ qua
 
             # 2. Check Quốc Gia (Chỉ check những con Ping thành công để tiết kiệm thời gian)
             try:
