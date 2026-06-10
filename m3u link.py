@@ -7,7 +7,7 @@ import os
 import json
 import re
 import urllib.request
-import concurrent.futures  # THƯ VIỆN MỚI: CHO PHÉP XỬ LÝ ĐA LUỒNG
+import concurrent.futures 
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -135,7 +135,7 @@ class AllInOneIPTVTool:
             self.log_area.grid(row=3, column=0, columnspan=2, padx=10, pady=5)
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
-            self.log("✅ Chế độ: Đa Luồng (Multi-threading), Đo Băng Thông 50KB, Tách VTV & TV360.")
+            self.log("✅ Chế độ: Đa Luồng, Đo Băng Thông 500KB, Tách VTV & TV360, Fallback an toàn.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT.")
             if is_in_startup():
@@ -209,9 +209,6 @@ class AllInOneIPTVTool:
         driver.set_page_load_timeout(30) 
         return driver
 
-    # ========================================================
-    # SỬA: ĐA LUỒNG (MULTI-THREADING) & ĐO BĂNG THÔNG 50KB
-    # ========================================================
     def _find_best_proxy(self, target_name="vtv", exclude_ip=None):
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO DANH SÁCH PROXY MỚI ĐỂ PHỤC VỤ {target_name.upper()}...")
         proxy_pool = []
@@ -295,7 +292,8 @@ class AllInOneIPTVTool:
             return None
 
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        self.log(f"   [Proxy] Gom được {len(unique_proxies)} IPs. Kích hoạt ĐA LUỒNG Test Tốc Độ Tải (50KB) từ {target_url}...")
+        # NÂNG CẤP: LOG THÔNG BÁO TẢI 500KB
+        self.log(f"   [Proxy] Gom được {len(unique_proxies)} IPs. Kích hoạt ĐA LUỒNG Test Tốc Độ Tải (500KB) từ {target_url}...")
 
         working_proxies = []
         lock = threading.Lock()
@@ -306,18 +304,17 @@ class AllInOneIPTVTool:
                 proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
                 opener = urllib.request.build_opener(proxy_handler)
                 
-                # Check VN IP
                 check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
                 check_res = opener.open(check_req, timeout=2) 
                 geo_data = json.loads(check_res.read().decode('utf-8'))
                 
                 if geo_data.get("countryCode") == "VN":
-                    # THROUGHPUT TEST (Tải 50KB dữ liệu thực tế)
                     start_time = time.time()
                     req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
                     response = opener.open(req, timeout=5) 
                     
-                    chunk = response.read(102400) # Đã nâng lên 50KB
+                    # NÂNG CẤP: ÉP TẢI 500KB DATA (512000 Bytes)
+                    chunk = response.read(512000) 
                     
                     if len(chunk) > 100: 
                         load_time = time.time() - start_time
@@ -326,7 +323,6 @@ class AllInOneIPTVTool:
             except Exception:
                 pass 
 
-        # THỰC THI ĐA LUỒNG TỐI ĐA 15 LUỒNG CÙNG LÚC
         with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
             futures = [executor.submit(test_single_proxy, ip, source) for ip, source in unique_proxies.items()]
             concurrent.futures.wait(futures)
@@ -334,15 +330,12 @@ class AllInOneIPTVTool:
         if working_proxies:
             working_proxies.sort(key=lambda x: x[0])
             best = working_proxies[0]
-            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Tốc độ kéo 50KB: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
+            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Tốc độ kéo 500KB: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
             return best[1]
         else:
-            self.log(f"   [Proxy] ❌ Toàn bộ Proxy đều chết mạng hoặc vỡ kết nối khi ép tải 50KB từ {target_name.upper()}.")
+            self.log(f"   [Proxy] ❌ Toàn bộ Proxy đều chết mạng hoặc vỡ kết nối khi ép tải 500KB từ {target_name.upper()}.")
             return None
 
-    # ========================================================
-    # CÁC HÀM XỬ LÝ DỮ LIỆU CŨ & TIỆN ÍCH
-    # ========================================================
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -467,7 +460,6 @@ class AllInOneIPTVTool:
             self.log(f"▶ LƯỢT 1 VTV: Mở trình duyệt (Proxy: {vtv_p1})")
             driver = self._create_driver(vtv_p1)
             
-            # Cào Kênh VTV
             try:
                 driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
                 time.sleep(3) 
@@ -495,7 +487,6 @@ class AllInOneIPTVTool:
                                 })
             except: pass
 
-            # Lấy Token VTV
             m3u8_url = None
             for i in range(30): 
                 logs = driver.get_log('performance')
@@ -518,7 +509,6 @@ class AllInOneIPTVTool:
             else:
                 self.log("   ❌ Lượt 1: Không bắt được Token VTV.")
 
-            # Cào Dynamic VTV
             vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic']
             for idx, ch in enumerate(vtv_dynamic, 1):
                 f_link, s_msg = self.catch_m3u8_vtvgo(driver, ch['url'])
@@ -536,6 +526,7 @@ class AllInOneIPTVTool:
                 self.log("\n⚠️ VTV LƯỢT 1 CÓ LỖI. Khởi động quy trình cứu hộ LƯỢT 2...")
                 vtv_p2 = self._find_best_proxy("vtv", exclude_ip=vtv_p1) 
                 
+                # NÂNG CẤP: BẮT LỖI P2 = NONE VÀ CHUYỂN THẲNG FALLBACK 
                 if vtv_p2:
                     self.log(f"▶ LƯỢT 2 VTV: Mở trình duyệt (Proxy: {vtv_p2})")
                     driver2 = self._create_driver(vtv_p2)
@@ -572,6 +563,8 @@ class AllInOneIPTVTool:
                             self.log(f"   [Cứu VTV] {ch['name']} -> ❌ Lỗi")
                     
                     driver2.quit()
+                else:
+                    self.log("   ❌ Hủy Lượt 2 do không tìm được Proxy phụ khỏe nào. Chuyển sang Fallback.")
 
         # ---------------------------------------------------------
         # CHU TRÌNH 2: TV360
@@ -624,7 +617,6 @@ class AllInOneIPTVTool:
             self.log(f"▶ LƯỢT 1 TV360: Mở trình duyệt (Proxy: {tv360_p1})")
             driver = self._create_driver(tv360_p1)
             
-            # Cào DOM TV360
             try:
                 driver.get("https://tv360.vn/tv")
                 for _ in range(8):
@@ -643,7 +635,6 @@ class AllInOneIPTVTool:
                     self.log(f"   -> Lượt 1: DOM TV360 lấy được {len(dom_list)} kênh.")
             except: pass
 
-            # Cào Dynamic TV360
             for idx, ch in enumerate(tv360_channels, 1):
                 f_link, s_msg = self.catch_m3u8_tv360(driver, ch['url'])
                 if s_msg == "PREMIUM":
@@ -663,6 +654,7 @@ class AllInOneIPTVTool:
                 self.log("\n⚠️ TV360 LƯỢT 1 CÓ LỖI. Khởi động quy trình cứu hộ LƯỢT 2...")
                 tv360_p2 = self._find_best_proxy("tv360", exclude_ip=tv360_p1)
                 
+                # NÂNG CẤP: BẮT LỖI P2 = NONE VÀ CHUYỂN THẲNG FALLBACK
                 if tv360_p2:
                     self.log(f"▶ LƯỢT 2 TV360: Mở trình duyệt (Proxy: {tv360_p2})")
                     driver2 = self._create_driver(tv360_p2)
@@ -696,6 +688,8 @@ class AllInOneIPTVTool:
                             self.log(f"   [Cứu TV360] {ch['name']} -> ❌ Lỗi")
                     
                     driver2.quit()
+                else:
+                    self.log("   ❌ Hủy Lượt 2 do không tìm được Proxy phụ khỏe nào. Chuyển sang Fallback.")
 
         # ---------------------------------------------------------
         # GOM DATA & XỬ LÝ FALLBACK CUỐI CÙNG
