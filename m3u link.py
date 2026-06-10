@@ -8,6 +8,7 @@ import sys
 import os
 import json
 import re
+import concurrent.futures
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -85,9 +86,8 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        # EDIT: Đảm bảo đường dẫn file xuất ra tương thích trên GitHub Actions (Linux)
         if self.headless:
-            self.current_path = "vn.m3u" # Lưu tại thư mục hiện tại trên GitHub
+            self.current_path = "vn.m3u"
         else:
             self.current_path = self.settings.get("path", "D:\\Tool\\vn.m3u")
 
@@ -125,7 +125,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV (Loại bỏ Rạp phim).")
-            self.log("✅ Đã thiết lập: Thời gian đợi 30s, Fallback Link cũ & Check Premium.")
+            self.log("✅ Đã thiết lập: Thời gian đợi 12s, Fallback Link cũ & Check Premium.")
             if is_in_startup():
                 self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
 
@@ -181,6 +181,23 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
+    # --- HÀM TẠO DRIVER RIÊNG LẺ (CẦN CHO ĐA LUỒNG) ---
+    def _create_driver(self):
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new") 
+        chrome_options.add_argument("--mute-audio")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
+        chrome_options.add_argument("--no-sandbox") 
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--remote-debugging-port=9222")
+        chrome_options.page_load_strategy = 'eager'
+        chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(30)
+        return driver
+
     # --- HÀM LẤY LINK M3U8 TỪ FILE CŨ (FALLBACK) ---
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
@@ -226,13 +243,12 @@ class AllInOneIPTVTool:
         text = re.sub(r'\s+', '-', text).strip('-')
         return text
 
-    # --- HÀM BẮT M3U8 VTVGO (ĐỢI TỐI ĐA 30S) ---
+    # --- HÀM BẮT M3U8 VTVGO ---
     def catch_m3u8_vtvgo(self, driver, url):
         try:
             driver.get_log('performance') 
             driver.get(url)
             time.sleep(2) 
-            
             try:
                 driver.execute_script("""
                     var btns = document.getElementsByTagName('button');
@@ -244,7 +260,7 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for _ in range(30): 
+            for _ in range(12): # Giảm wait xuống 12s để tăng tốc
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -256,11 +272,11 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 30s"
+            return None, "Timeout 12s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # --- HÀM BẮT M3U8 TV360 (CHECK PHÍ + ĐỢI TỐI ĐA 30S) ---
+    # --- HÀM BẮT M3U8 TV360 ---
     def catch_m3u8_tv360(self, driver, url):
         try:
             driver.get_log('performance') 
@@ -275,7 +291,7 @@ class AllInOneIPTVTool:
                 driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for _ in range(30): 
+            for _ in range(12): # Giảm wait xuống 12s để tăng tốc
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -287,44 +303,30 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 30s"
+            return None, "Timeout 12s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
     # --- QUY TRÌNH QUÉT CHÍNH ---
     def extract_all_data(self):
         self.save_settings() 
-        self.log("Đang khởi động trình duyệt ngầm...")
         old_links_dict = self.load_old_m3u_links()
         master_channels_list = []
         vtv_token = None
         vtv_ts = None
+        main_driver = None
         
-        driver = None
         try:
-            chrome_options = Options()
-            chrome_options.add_argument("--headless=new") 
-            chrome_options.add_argument("--mute-audio")
-            chrome_options.add_argument("--window-size=1920,1080")
-            chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
-            
-            # EDIT: Cấu hình bắt buộc để Selenium chạy ổn định trên Server Linux / GitHub Actions
-            chrome_options.add_argument("--no-sandbox") 
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            
-            chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+            self.log("Đang khởi động trình duyệt để lấy cấu trúc kênh...")
+            main_driver = self._create_driver()
 
-            driver = webdriver.Chrome(options=chrome_options)
-
-            # ==========================================
-            # BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO
-            # ==========================================
+            # --- BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO ---
             self.log("Đang truy cập VTVGo lấy Dữ liệu Kênh...")
-            driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
+            main_driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
             time.sleep(3) 
             
             try:
-                driver.execute_script("""
+                main_driver.execute_script("""
                     var btns = document.getElementsByTagName('button');
                     for (var i=0; i<btns.length; i++) {
                         if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
@@ -335,22 +337,18 @@ class AllInOneIPTVTool:
             except: pass
             time.sleep(2)
 
-            page_source = driver.page_source
+            page_source = main_driver.page_source
             match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
             if match:
                 try:
                     state_json = json.loads(match.group(1))
                     groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
-                    
                     for group in groups:
                         group_name = group.get('name', 'Khác')
                         gn_lower = group_name.lower()
-                        
                         if 'vtv' in gn_lower or 'sctv' in gn_lower or 'địa phương' in gn_lower or 'dia phuong' in gn_lower:
                             if 'vtvcab' in gn_lower: continue
-                            
                             src_type = 'vtvgo_dynamic' if ('địa phương' in gn_lower or 'dia phuong' in gn_lower) else 'vtvgo_static'
-                            
                             for c in group.get('channels', []):
                                 slug = c.get('slug', '')
                                 if not slug: slug = self.create_slug(c.get('name'))
@@ -371,7 +369,7 @@ class AllInOneIPTVTool:
             self.log("Đang bắt Token chính (VTV/SCTV)...")
             m3u8_url = None
             for i in range(15):
-                logs = driver.get_log('performance')
+                logs = main_driver.get_log('performance')
                 for entry in logs:
                     try:
                         log_data = json.loads(entry['message'])['message']
@@ -391,33 +389,26 @@ class AllInOneIPTVTool:
             else:
                 self.log("❌ Không bắt được Token VTVGo.")
 
-            # ==========================================
-            # BƯỚC 2: LẤY DATA TỪ TV360 (GIAO DIỆN DOM THÔNG MINH)
-            # ==========================================
+            # --- BƯỚC 2: LẤY DATA TỪ TV360 ---
             self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
-            driver.get("https://tv360.vn/tv")
-            
+            main_driver.get("https://tv360.vn/tv")
             for _ in range(8):
-                driver.execute_script("window.scrollBy(0, 800);")
+                main_driver.execute_script("window.scrollBy(0, 800);")
                 time.sleep(1.5)
                 
             js_extractor_smart = """
                 var results = [];
                 var sections = document.querySelectorAll('.container-section');
-                
                 for (var i = 0; i < sections.length; i++) {
                     var h2 = sections[i].querySelector('h2');
                     if (!h2) continue;
                     var groupName = h2.innerText.trim();
                     var gnLower = groupName.toLowerCase();
-                    
                     var targetGroup = "";
                     if (gnLower.includes("vĩnh long")) targetGroup = "Vĩnh Long";
                     else if (gnLower.includes("htv")) targetGroup = "HTV";
                     else if (gnLower.includes("vtv cab")) targetGroup = "VTVCab";
-                    
                     if (!targetGroup) continue;
-
                     var links = sections[i].querySelectorAll('a');
                     for (var j = 0; j < links.length; j++) {
                         var href = links[j].href;
@@ -425,108 +416,95 @@ class AllInOneIPTVTool:
                             var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
                             var img = links[j].querySelector('img');
                             var logo = img ? img.src : '';
-                            
                             try {
                                 var urlObj = new URL(href);
                                 var id = urlObj.searchParams.get('ch');
                                 var slug = urlObj.pathname.split('/').pop();
-
-                                results.push({
-                                    id: id,
-                                    slug: slug,
-                                    name: name || slug,
-                                    logo: logo,
-                                    group_name: targetGroup,
-                                    link: href
-                                });
+                                results.push({ id: id, slug: slug, name: name || slug, logo: logo, group_name: targetGroup, link: href });
                             } catch(e) {}
                         }
                     }
                 }
-                
                 var unique = [];
                 var ids = new Set();
                 for(var ch of results){
-                    if(ch.id && !ids.has(ch.id)){
-                        ids.add(ch.id);
-                        unique.push(ch);
-                    }
+                    if(ch.id && !ids.has(ch.id)){ ids.add(ch.id); unique.push(ch); }
                 }
                 return unique;
             """
-            
-            tv360_dom_list = driver.execute_script(js_extractor_smart)
-            
+            tv360_dom_list = main_driver.execute_script(js_extractor_smart)
             if tv360_dom_list:
                 for c in tv360_dom_list:
                     master_channels_list.append({
-                        'id': str(c.get('id')),
-                        'name': c.get('name'),
-                        'logo': c.get('logo', ''),
-                        'group_name': c.get('group_name'),
-                        'source': 'tv360_dynamic',
-                        'url': c.get('link'),
-                        'm3u8_link': None,
-                        'error_msg': None,
-                        'skip': False
+                        'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
+                        'group_name': c.get('group_name'), 'source': 'tv360_dynamic',
+                        'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
                     })
                 self.log(f"-> Quét DOM TV360 thành công: Lấy {len(tv360_dom_list)} kênh chuẩn.")
             else:
                 self.log("❌ Không quét được kênh nào từ DOM TV360.")
 
-            # ==========================================
-            # BƯỚC 3: DEEP SCAN M3U8 CHO CÁC KÊNH DYNAMIC
-            # ==========================================
+            # Tắt trình duyệt chính đi để nhường RAM cho các luồng Worker quét ngầm
+            main_driver.quit()
+            main_driver = None
+
+            # --- BƯỚC 3: DEEP SCAN M3U8 ĐA LUỒNG ---
             dynamic_channels = [ch for ch in master_channels_list if ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic')]
+            
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu quét m3u8 mạng ngầm (Tối đa 30s/kênh) cho {len(dynamic_channels)} Kênh...")
-                for idx, ch in enumerate(dynamic_channels, 1):
-                    
-                    if ch['source'] == 'vtvgo_dynamic':
-                        found_link, status_msg = self.catch_m3u8_vtvgo(driver, ch['url'])
-                        if found_link:
-                            ch['m3u8_link'] = found_link
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] VTVGo: {ch['name']} -> ✅ OK (Mới)")
-                        elif ch['name'] in old_links_dict:
-                            ch['m3u8_link'] = old_links_dict[ch['name']]
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] VTVGo: {ch['name']} -> ⚠️ OK (Fallback)")
-                        else:
-                            ch['error_msg'] = status_msg
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] VTVGo: {ch['name']} -> ❌ Lỗi: {status_msg}")
+                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 3 Threads) cho {len(dynamic_channels)} Kênh...")
+                
+                # Hàm thực thi cho từng luồng
+                def process_channel_worker(ch):
+                    worker_driver = self._create_driver()
+                    try:
+                        if ch['source'] == 'vtvgo_dynamic':
+                            found_link, status_msg = self.catch_m3u8_vtvgo(worker_driver, ch['url'])
+                            if found_link:
+                                ch['m3u8_link'] = found_link
+                                self.log(f"   [VTVGo] {ch['name']} -> ✅ OK (Mới)")
+                            elif ch['name'] in old_links_dict:
+                                ch['m3u8_link'] = old_links_dict[ch['name']]
+                                self.log(f"   [VTVGo] {ch['name']} -> ⚠️ OK (Fallback)")
+                            else:
+                                ch['error_msg'] = status_msg
+                                self.log(f"   [VTVGo] {ch['name']} -> ❌ Lỗi: {status_msg}")
 
-                    elif ch['source'] == 'tv360_dynamic':
-                        found_link, status_msg = self.catch_m3u8_tv360(driver, ch['url'])
-                        
-                        if status_msg == "PREMIUM":
-                            ch['skip'] = True
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> 💰 Bỏ qua (Thu phí)")
-                        elif found_link:
-                            ch['m3u8_link'] = found_link
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ✅ OK (Mới)")
-                        elif ch['name'] in old_links_dict:
-                            ch['m3u8_link'] = old_links_dict[ch['name']]
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ⚠️ OK (Fallback)")
-                        else:
-                            ch['error_msg'] = status_msg
-                            self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ❌ Lỗi: {status_msg}")
+                        elif ch['source'] == 'tv360_dynamic':
+                            found_link, status_msg = self.catch_m3u8_tv360(worker_driver, ch['url'])
+                            if status_msg == "PREMIUM":
+                                ch['skip'] = True
+                                self.log(f"   [TV360] {ch['name']} -> 💰 Bỏ qua (Thu phí)")
+                            elif found_link:
+                                ch['m3u8_link'] = found_link
+                                self.log(f"   [TV360] {ch['name']} -> ✅ OK (Mới)")
+                            elif ch['name'] in old_links_dict:
+                                ch['m3u8_link'] = old_links_dict[ch['name']]
+                                self.log(f"   [TV360] {ch['name']} -> ⚠️ OK (Fallback)")
+                            else:
+                                ch['error_msg'] = status_msg
+                                self.log(f"   [TV360] {ch['name']} -> ❌ Lỗi: {status_msg}")
+                    finally:
+                        worker_driver.quit()
 
-            driver.quit()
+                # Khởi chạy 3 luồng cùng lúc
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    executor.map(process_channel_worker, dynamic_channels)
+
             return vtv_token, vtv_ts, master_channels_list
 
         except Exception as e:
             self.log(f"❌ Lỗi Hệ thống: {e}")
-            if driver: driver.quit()
+            if main_driver: main_driver.quit()
             return None, None, None
 
     # --- TẠO FILE M3U TỪ DANH SÁCH TỔNG ---
     def generate_m3u(self, vtv_token, vtv_ts, master_channels_list):
-        # YÊU CẦU 1: Ép ANTV, QPTV vào nhóm VTV (Bổẩm từ khóa bắt kênh "Truyền hình Công an Nhân dân")
         for ch in master_channels_list:
             ch_name_lower = ch['name'].lower()
             if any(keyword in ch_name_lower for keyword in ['an ninh', 'antv', 'quốc phòng', 'qptv', 'công an nhân dân', 'cand']):
                 ch['group_name'] = 'VTV'
 
-        # YÊU CẦU 2: Hàm để sắp xếp ưu tiên Group (VTV > VTV Cab > HTV > Vĩnh Long > SCTV > Địa Phương)
         def get_group_priority(group_name):
             gn_lower = group_name.lower()
             if 'vtv cab' in gn_lower or 'vtvcab' in gn_lower: return 2
@@ -535,9 +513,8 @@ class AllInOneIPTVTool:
             if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'ttvl' in gn_lower: return 4
             if 'sctv' in gn_lower: return 5
             if 'địa phương' in gn_lower or 'dia phuong' in gn_lower: return 6
-            return 7 # Các nhóm khác nếu có
+            return 7 
 
-        # Thực hiện Sort List kênh theo Priority
         master_channels_list.sort(key=lambda x: get_group_priority(x['group_name']))
 
         m3u_content = "#EXTM3U\n"
@@ -578,36 +555,31 @@ class AllInOneIPTVTool:
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(m3u_content)
-            self.log(f"🎉 HOÀN TẤT! Đã xuất file M3U Hỗn hợp thành công theo chuẩn Group và Thứ tự ưu tiên.")
+            self.log(f"🎉 HOÀN TẤT! Đã xuất file M3U Hỗn hợp thành công.")
         except Exception as e:
             self.log(f"❌ LỖI Ghi file: {e}")
 
-    # Chạy quy trình khi dùng giao diện
     def run_update_process(self):
         if not self.headless:
             self.btn_manual.config(state="disabled")
-            
         tk_val, ts_val, channels_data = self.extract_all_data()
         if channels_data:
             self.generate_m3u(tk_val, ts_val, channels_data)
-            
         if not self.headless:
             self.btn_manual.config(state="normal")
 
     def manual_update(self):
         threading.Thread(target=self.run_update_process, daemon=True).start()
 
-    # Chạy quy trình ngầm (dành cho startup windows hoặc GitHub Actions)
     def run_update_process_headless(self):
-        self.log("=== BẮT ĐẦU CHẠY NGẦM THEO LỊCH STARTUP/GITHUB ===")
+        self.log("=== BẮT ĐẦU CHẠY NGẦM GITHUB ===")
         tk_val, ts_val, channels_data = self.extract_all_data()
         if channels_data:
             self.generate_m3u(tk_val, ts_val, channels_data)
-        self.log("=== KẾT THÚC CHẠY NGẦM TỰ ĐỘNG ===")
+        self.log("=== KẾT THÚC CHẠY NGẦM ===")
 
 if __name__ == "__main__":
     is_startup_mode = "--startup" in sys.argv
-    
     if is_startup_mode:
         app = AllInOneIPTVTool(None, headless=True)
         app.run_update_process_headless()
