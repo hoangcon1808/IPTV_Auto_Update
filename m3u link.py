@@ -213,18 +213,19 @@ class AllInOneIPTVTool:
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO DANH SÁCH PROXY MỚI ĐỂ PHỤC VỤ {target_name.upper()}...")
         proxy_pool = []
 
+        # --- NGUỒN CÀO QUA API TEXT/JSON ---
         try:
             url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             res = urllib.request.urlopen(req, timeout=10)
             data = res.read().decode('utf-8').strip()
+            count = 0
             if data:
-                count = 0
                 for p in data.split('\r\n'):
                     if p.strip():
                         proxy_pool.append({'ip': p.strip(), 'source': 'API_ProxyScrape'})
                         count += 1
-                self.log(f"      [Debug] Nguồn 1 (API ProxyScrape): {count} IPs.")
+            self.log(f"      [Debug] Nguồn 1 (API ProxyScrape): {count} IPs.")
         except: pass
 
         try:
@@ -240,6 +241,53 @@ class AllInOneIPTVTool:
             self.log(f"      [Debug] Nguồn 2 (API Geonode): {count} IPs.")
         except: pass
 
+        try:
+            url = "https://www.proxy-list.download/api/v1/get?type=http&country=VN"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = res.read().decode('utf-8').strip()
+            count = 0
+            if data:
+                for p in data.split('\r\n'):
+                    if p.strip():
+                        proxy_pool.append({'ip': p.strip(), 'source': 'API_ProxyListDownload'})
+                        count += 1
+            self.log(f"      [Debug] Nguồn 5 (Proxy-List.download): {count} IPs.")
+        except: pass
+
+        try:
+            url = "https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            lines = res.read().decode('utf-8').strip().split('\n')
+            count = 0
+            for line in lines:
+                try:
+                    p_data = json.loads(line)
+                    if p_data.get("country") == "VN" and p_data.get("type") == "http":
+                        ip_port = f"{p_data['host']}:{p_data['port']}"
+                        proxy_pool.append({'ip': ip_port, 'source': 'API_FateZero'})
+                        count += 1
+                except: continue
+            self.log(f"      [Debug] Nguồn 6 (FateZero): {count} IPs.")
+        except: pass
+
+        try:
+            url = "https://spys.me/proxy.txt"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            res = urllib.request.urlopen(req, timeout=10)
+            data = res.read().decode('utf-8')
+            count = 0
+            for line in data.split('\n'):
+                if 'VN' in line:
+                    match = re.search(r'^(\d{1,3}(?:\.\d{1,3}){3}:\d+)', line)
+                    if match:
+                        proxy_pool.append({'ip': match.group(1), 'source': 'API_SpysMe'})
+                        count += 1
+            self.log(f"      [Debug] Nguồn mới (Spys.me): {count} IPs.")
+        except: pass
+
+        # --- NGUỒN CÀO QUA WEB SELENIUM ---
         driver = None
         try:
             driver = self._create_driver() 
@@ -278,10 +326,39 @@ class AllInOneIPTVTool:
                         count += 1
                 self.log(f"      [Debug] Nguồn 4 (Spys.one): {count} IPs.")
             except: pass
+
+            try:
+                driver.get("https://www.proxynova.com/proxy-server-list/country-vn/")
+                time.sleep(3)
+                js_extract_nova = """
+                    var results = [];
+                    var rows = document.querySelectorAll('#tbl_proxy_list tbody tr');
+                    for(var i=0; i<rows.length; i++) {
+                        if (!rows[i].hasAttribute('data-proxy-id')) continue;
+                        var ipTd = rows[i].querySelector('td:nth-child(1)');
+                        var portTd = rows[i].querySelector('td:nth-child(2)');
+                        if(ipTd && portTd) {
+                            var ipText = ipTd.innerText.replace(/[^0-9\.]/g, '').trim();
+                            var portText = portTd.innerText.trim();
+                            if(ipText && portText) results.push(ipText + ':' + portText);
+                        }
+                    }
+                    return results;
+                """
+                matches = driver.execute_script(js_extract_nova)
+                count = 0
+                if matches:
+                    for ip_port in matches:
+                        proxy_pool.append({'ip': ip_port, 'source': 'WEB_ProxyNova'})
+                        count += 1
+                self.log(f"      [Debug] Nguồn 8 (ProxyNova): {count} IPs.")
+            except: pass
+
         except: pass
         finally:
             if driver: driver.quit()
 
+        # Loại bỏ các IP trùng lặp
         unique_proxies = {}
         for p in proxy_pool:
             if p['ip'] not in unique_proxies:
@@ -316,15 +393,16 @@ class AllInOneIPTVTool:
                     total_ping += (time.time() - start_time)
                     success_count += 1
                 except Exception:
-                    pass # Xịt thì ko cộng success_count
-                time.sleep(0.5) # Nghỉ nhẹ giữa các lần ping
+                    pass 
+                time.sleep(0.5) # Nghỉ 0.5s giữa các lần ping
             
             if success_count > 0:
                 avg_ping = total_ping / success_count
                 return (success_count, avg_ping, ip, source)
             return None
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+        # Tăng số luồng lên 30 do lượng IP tổng hợp lớn
+        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
             futures = [executor.submit(ping_target_web, ip, source) for ip, source in unique_proxies.items()]
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
@@ -335,8 +413,9 @@ class AllInOneIPTVTool:
             self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết khi truy cập {target_name.upper()}.")
             return None
 
-        # BƯỚC 2: Phân loại Proxy thành 2 Tier và Check IP Việt Nam
-        # Tier 1: Ping qua 3/3 lần. Tier 2: Ping qua 1 hoặc 2 lần (dự phòng)
+        # BƯỚC 2: Phân loại Proxy thành 2 Vòng lựa chọn (Tier 1 & Tier 2) và Check IP Việt Nam
+        # Tier 1 (Hoàn hảo): Sống đủ 3/3 lần ping
+        # Tier 2 (Dự phòng): Sống 1 hoặc 2 lần ping
         tier1 = [p for p in working_proxies if p[0] == 3]
         tier2 = [p for p in working_proxies if p[0] < 3]
         
@@ -350,16 +429,17 @@ class AllInOneIPTVTool:
                 try:
                     proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
                     opener = urllib.request.build_opener(proxy_handler)
-                    check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-                    check_res = opener.open(check_req, timeout=3)
+                    # Sử dụng GeoJS API siêu mượt, chống chặn
+                    check_req = urllib.request.Request("https://get.geojs.io/v1/ip/country.json", headers={'User-Agent': 'Mozilla/5.0'})
+                    check_res = opener.open(check_req, timeout=5)
                     geo_data = json.loads(check_res.read().decode('utf-8'))
                     
-                    if geo_data.get("countryCode") == "VN":
+                    if geo_data.get("country") == "VN":
                         self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN [{tier_name}]: {ip} (Ping: {ping_time:.2f}s, Pass: {success_count}/3) - Nguồn: [{source}]")
                         return ip
                 except Exception:
                     pass
-                time.sleep(0.3)
+                time.sleep(0.2)
             return None
 
         # Ưu tiên lấy Tier 1 trước
@@ -607,12 +687,16 @@ class AllInOneIPTVTool:
                     var href = links[j].href;
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
-                        // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC: 
-                        // cbac622c276c.png là icon đỏ chữ VIP góc trái trên TV360.
-                        // Những kênh VIP sẽ chứa một thẻ con có icon này.
+                        // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC NHẤT: 
+                        // Kênh VIP luôn chứa một thẻ con có class CSS đặc trưng '.css-1hssde8'
+                        // (Hoặc fallback kiểm tra file ảnh cbac622c276c.png)
+                        if (links[j].querySelector('.css-1hssde8')) {
+                            continue; // Bỏ qua kênh thu phí
+                        }
+                        
                         var innerHTML = links[j].innerHTML.toLowerCase();
                         if (innerHTML.includes('cbac622c276c.png')) {
-                            continue; // Bỏ qua kênh thu phí
+                            continue; // Dự phòng check chuỗi icon VIP
                         }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
