@@ -120,7 +120,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV.")
-            self.log("✅ Chế độ Test: CHẠY TUẦN TỰ TỪNG LINK (Single Thread), Đợi 300s, Tối giản Token.")
+            self.log("✅ Chế độ Test: CHẠY TUẦN TỰ TỪNG LINK (BẬT LẠI GPU), Đợi 300s, Tối giản Token.")
 
     def get_file_path(self):
         if self.headless:
@@ -183,7 +183,7 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
         chrome_options.add_argument("--no-sandbox") 
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
+        # chrome_options.add_argument("--disable-gpu") # Đã gỡ bỏ theo yêu cầu test của người dùng
         chrome_options.add_argument("--remote-debugging-port=9222")
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
@@ -376,7 +376,6 @@ class AllInOneIPTVTool:
                         log_data = json.loads(entry['message'])['message']
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
-                            # CẢI TIẾN LỚN: Tóm bất kỳ link .m3u8 đầu tiên nào xuất hiện để lấy Token
                             if '.m3u8' in req_url:
                                 match_token = re.search(r'/([a-zA-Z0-9]{20,})/(\d{10})/', req_url)
                                 if match_token:
@@ -459,7 +458,6 @@ class AllInOneIPTVTool:
             if dynamic_channels:
                 self.log(f"⏳ Bắt đầu quét mạng ngầm TUẦN TỰ (Single Thread) cho {len(dynamic_channels)} Kênh...")
                 
-                # QUAY LẠI CHẠY TUẦN TỰ (Mở 1 driver duy nhất)
                 worker_driver = self._create_driver()
                 try:
                     for idx, ch in enumerate(dynamic_channels, 1):
