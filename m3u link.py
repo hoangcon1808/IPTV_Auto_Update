@@ -8,7 +8,6 @@ import sys
 import os
 import json
 import re
-import concurrent.futures
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -121,7 +120,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV.")
-            self.log("✅ Đã thiết lập: Đa luồng (Max 10 Threads), Thời gian đợi 300s (5 phút), Fallback CHUẨN.")
+            self.log("✅ Chế độ Test: CHẠY TUẦN TỰ TỪNG LINK (Single Thread), Đợi 300s, Tối giản Token.")
 
     def get_file_path(self):
         if self.headless:
@@ -189,10 +188,9 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(300) # Đợi 5 phút cho page load
+        driver.set_page_load_timeout(300) 
         return driver
 
-    # --- HÀM LẤY FALLBACK CHUẨN (CẢ LINK LẪN TOKEN) ---
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -208,14 +206,12 @@ class AllInOneIPTVTool:
                 if line.startswith("#EXTINF"):
                     parts = line.split(',')
                     if len(parts) > 1: current_name = parts[-1].strip()
-                # CẢI TIẾN: Chỉ lấy các dòng thực sự là link (bắt đầu bằng http) để chống lỗi
                 elif line.startswith("http"): 
                     if current_name:
                         old_links[current_name] = line
                         current_name = None
-                    # Tìm Token VTV cũ nếu có
-                    if "vtvgolive-ssaimh.vtvdigital.vn" in line and old_token is None:
-                        match = re.search(r'vtvdigital\.vn/([^/]+)/([^/]+)/manifest', line)
+                    if old_token is None:
+                        match = re.search(r'/([a-zA-Z0-9]{20,})/(\d{10})/', line)
                         if match:
                             old_token, old_ts = match.group(1), match.group(2)
         except Exception: pass
@@ -257,11 +253,14 @@ class AllInOneIPTVTool:
                         if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
                     }
                     var vids = document.getElementsByTagName('video');
-                    if (vids.length > 0) vids[0].play();
+                    if (vids.length > 0) {
+                        vids[0].muted = true; 
+                        vids[0].play();
+                    }
                 """)
             except: pass
 
-            for _ in range(300): # TEST: Chờ 300s
+            for _ in range(300): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -288,10 +287,10 @@ class AllInOneIPTVTool:
                 return None, "PREMIUM"
             
             try:
-                driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
+                driver.execute_script("var v=document.querySelector('video'); if(v) { v.muted = true; v.play(); }")
             except: pass
 
-            for _ in range(300): # TEST: Chờ 300s
+            for _ in range(300): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -330,7 +329,10 @@ class AllInOneIPTVTool:
                         if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
                     }
                     var vids = document.getElementsByTagName('video');
-                    if(vids.length>0) vids[0].play();
+                    if(vids.length>0) {
+                        vids[0].muted = true;
+                        vids[0].play();
+                    }
                 """)
             except: pass
             time.sleep(2)
@@ -367,26 +369,28 @@ class AllInOneIPTVTool:
             self.log("Đang bắt Token chính (VTV/SCTV)... Chờ tối đa 300s...")
             m3u8_url = None
             
-            for i in range(300): # TEST: Chờ 300s
+            for i in range(300): 
                 logs = main_driver.get_log('performance')
                 for entry in logs:
                     try:
                         log_data = json.loads(entry['message'])['message']
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
-                            if '.m3u8' in req_url and 'vtvdigital.vn' in req_url and '/manifest/' in req_url:
-                                m3u8_url = req_url
-                                break
+                            # CẢI TIẾN LỚN: Tóm bất kỳ link .m3u8 đầu tiên nào xuất hiện để lấy Token
+                            if '.m3u8' in req_url:
+                                match_token = re.search(r'/([a-zA-Z0-9]{20,})/(\d{10})/', req_url)
+                                if match_token:
+                                    m3u8_url = req_url
+                                    vtv_token = match_token.group(1)
+                                    vtv_ts = match_token.group(2)
+                                    break
                     except: continue
                 if m3u8_url: break
                 time.sleep(1)
 
-            if m3u8_url:
-                parts = m3u8_url.split('/')
-                vtv_token, vtv_ts = parts[3], parts[4]
+            if m3u8_url and vtv_token and vtv_ts:
                 self.log(f"✅ Bắt Token VTVGo thành công: {vtv_token[:8]}...")
             else:
-                # SỬ DỤNG FALLBACK TOKEN NẾU THẤT BẠI
                 if fallback_token and fallback_ts:
                     vtv_token, vtv_ts = fallback_token, fallback_ts
                     self.log(f"⚠️ Dùng Token VTVGo CŨ (Fallback): {vtv_token[:8]}...")
@@ -395,7 +399,7 @@ class AllInOneIPTVTool:
 
             self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
             main_driver.get("https://tv360.vn/tv")
-            for _ in range(15): # CẢI TIẾN: Cuộn 15 lần để quét đủ các kênh TV360
+            for _ in range(15):
                 main_driver.execute_script("window.scrollBy(0, 800);")
                 time.sleep(1.5)
                 
@@ -453,45 +457,40 @@ class AllInOneIPTVTool:
             dynamic_channels = [ch for ch in master_channels_list if ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic')]
             
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 10 Threads) cho {len(dynamic_channels)} Kênh...")
+                self.log(f"⏳ Bắt đầu quét mạng ngầm TUẦN TỰ (Single Thread) cho {len(dynamic_channels)} Kênh...")
                 
-                def process_channel_worker(ch):
-                    worker_driver = self._create_driver()
-                    try:
+                # QUAY LẠI CHẠY TUẦN TỰ (Mở 1 driver duy nhất)
+                worker_driver = self._create_driver()
+                try:
+                    for idx, ch in enumerate(dynamic_channels, 1):
                         if ch['source'] == 'vtvgo_dynamic':
                             found_link, status_msg = self.catch_m3u8_vtvgo(worker_driver, ch['url'])
                             if found_link:
                                 ch['m3u8_link'] = found_link
-                                self.log(f"   [VTVGo] {ch['name']} -> ✅ OK (Mới)")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [VTVGo] {ch['name']} -> ✅ OK (Mới)")
                             elif ch['name'] in old_links_dict:
                                 ch['m3u8_link'] = old_links_dict[ch['name']]
-                                self.log(f"   [VTVGo] {ch['name']} -> ⚠️ OK (Fallback)")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [VTVGo] {ch['name']} -> ⚠️ OK (Fallback)")
                             else:
                                 ch['error_msg'] = status_msg
-                                self.log(f"   [VTVGo] {ch['name']} -> ❌ Lỗi: {status_msg}")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [VTVGo] {ch['name']} -> ❌ Lỗi: {status_msg}")
 
                         elif ch['source'] == 'tv360_dynamic':
                             found_link, status_msg = self.catch_m3u8_tv360(worker_driver, ch['url'])
                             if status_msg == "PREMIUM":
                                 ch['skip'] = True
-                                self.log(f"   [TV360] {ch['name']} -> 💰 Bỏ qua (Thu phí)")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [TV360] {ch['name']} -> 💰 Bỏ qua (Thu phí)")
                             elif found_link:
                                 ch['m3u8_link'] = found_link
-                                self.log(f"   [TV360] {ch['name']} -> ✅ OK (Mới)")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [TV360] {ch['name']} -> ✅ OK (Mới)")
                             elif ch['name'] in old_links_dict:
                                 ch['m3u8_link'] = old_links_dict[ch['name']]
-                                self.log(f"   [TV360] {ch['name']} -> ⚠️ OK (Fallback)")
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [TV360] {ch['name']} -> ⚠️ OK (Fallback)")
                             else:
                                 ch['error_msg'] = status_msg
-                                self.log(f"   [TV360] {ch['name']} -> ❌ Lỗi: {status_msg}")
-                    finally:
-                        worker_driver.quit()
-
-                # Tối ưu RAM và CPU công khai: Mở 10 Threads
-                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = [executor.submit(process_channel_worker, ch) for ch in dynamic_channels]
-                    for future in concurrent.futures.as_completed(futures):
-                        pass
+                                self.log(f"   [{idx}/{len(dynamic_channels)}] [TV360] {ch['name']} -> ❌ Lỗi: {status_msg}")
+                finally:
+                    worker_driver.quit()
 
             return vtv_token, vtv_ts, master_channels_list
 
