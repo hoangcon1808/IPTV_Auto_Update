@@ -1,5 +1,3 @@
-# --- START OF FILE m3u link.py ---
-
 import tkinter as tk
 from tkinter import scrolledtext, filedialog, messagebox
 import threading
@@ -648,10 +646,18 @@ class AllInOneIPTVTool:
             return None, None, None
 
     def generate_m3u(self, vtv_token, vtv_ts, master_channels_list):
+        # Tự động tìm tên nhóm chính thống của VTV (lấy VTV1 làm chuẩn)
+        official_vtv_group = "Kênh VTV" # Tên dự phòng
+        for ch in master_channels_list:
+            if ch['name'].upper() == "VTV1":
+                official_vtv_group = ch['group_name']
+                break
+
+        # Gán kênh An Ninh, Quốc Phòng vào đúng cái nhóm vừa tìm được
         for ch in master_channels_list:
             ch_name_lower = ch['name'].lower()
             if any(keyword in ch_name_lower for keyword in ['an ninh', 'antv', 'quốc phòng', 'qptv', 'công an nhân dân', 'cand']):
-                ch['group_name'] = 'VTV'
+                ch['group_name'] = official_vtv_group
 
         def get_group_priority(group_name):
             gn_lower = group_name.lower()
@@ -751,5 +757,3 @@ if __name__ == "__main__":
         root = tk.Tk()
         app = AllInOneIPTVTool(root, headless=False)
         root.mainloop()
-
-# --- END OF FILE m3u link.py ---
