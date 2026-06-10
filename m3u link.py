@@ -10,6 +10,9 @@ import urllib.request
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # --- FIX LỖI UNICODE TRÊN WINDOWS TERMINAL TẠI GITHUB ACTIONS ---
 if hasattr(sys.stdout, 'reconfigure'):
@@ -149,7 +152,7 @@ class AllInOneIPTVTool:
     def log(self, message):
         now = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{now}] {message}"
-        print(formatted_message) # Print ra console (Dùng cho cả Headless)
+        print(formatted_message) 
         
         if not self.headless and hasattr(self, 'log_area'):
             self.log_area.config(state='normal')
@@ -232,7 +235,6 @@ class AllInOneIPTVTool:
                 count = 0
                 for line in table_text.split('\n'):
                     if " VN " in line or "Vietnam" in line:
-                        # Regex linh hoạt cho Free Proxy List
                         match = re.search(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)(?!\d)', line)
                         if match:
                             proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxyList'})
@@ -241,20 +243,36 @@ class AllInOneIPTVTool:
             except Exception as e:
                 self.log(f"   [Proxy] Nguồn 2 Lỗi: {e}")
 
-            # --- NGUỒN 3: Spys.one (ĐÃ FIX: Giải mã JS Port) ---
+            # --- NGUỒN 3: Spys.one (ĐÃ FIX TẬN GỐC TỪ CẤU TRÚC DOM) ---
             try:
                 driver.get("https://spys.one/free-proxy-list/VN/")
-                time.sleep(4) # Chờ thêm chút cho JS của Spys.one giải mã Port xong
                 
-                # Ép trình duyệt trả về text đã render hoàn chỉnh bằng JS
-                body_text = driver.execute_script("return document.body.innerText;")
+                # Chờ thông minh: Đợi tối đa 10s cho đến khi thẻ font.spy14 xuất hiện (bảng đã load xong)
+                try:
+                    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
+                except:
+                    self.log("      [Debug] Spys.one load quá chậm hoặc máy chủ GitHub bị dính Captcha chặn Bot.")
+
+                # Dùng JS chọc thẳng vào thẻ <font class="spy14"> để đọc nội dung đã được JS render hoàn chỉnh
+                js_extract = """
+                    var results = [];
+                    var elements = document.querySelectorAll('font.spy14');
+                    for(var i = 0; i < elements.length; i++) {
+                        var txt = elements[i].innerText.trim();
+                        // Chỉ lấy những chuỗi khớp chính xác định dạng IP:Port
+                        if(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(txt)) {
+                            results.push(txt);
+                        }
+                    }
+                    return results;
+                """
+                matches = driver.execute_script(js_extract)
                 
-                # Quét Regex linh hoạt: Cho phép khoảng trắng giữa IP và Port (vd: 127.0.0.1 : 8080)
-                matches = re.findall(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s*:\s*(\d+)(?!\d)', body_text)
                 count = 0
-                for ip, port in matches:
-                    proxy_pool.append({'ip': f"{ip}:{port}", 'source': 'WEB_SpysOne'})
-                    count += 1
+                if matches:
+                    for ip_port in matches:
+                        proxy_pool.append({'ip': ip_port, 'source': 'WEB_SpysOne'})
+                        count += 1
                 self.log(f"   [Proxy] Nguồn 3 (Spys.one): Thu được {count} IPs.")
             except Exception as e:
                 self.log(f"   [Proxy] Nguồn 3 Lỗi: {e}")
