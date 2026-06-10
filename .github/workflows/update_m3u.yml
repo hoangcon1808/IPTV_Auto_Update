@@ -7,7 +7,6 @@ on:
 
 jobs:
   build:
-    # CHUYỂN SANG CHẠY TRÊN MÁY CHỦ WINDOWS NHƯ YÊU CẦU
     runs-on: windows-latest
 
     steps:
@@ -25,6 +24,8 @@ jobs:
         pip install selenium
 
     - name: Chạy Tool Cào Data (Debug Mode)
+      env:
+        PYTHONIOENCODING: utf-8
       run: python -u "m3u link.py" --startup
 
     - name: Lưu đè file vn.m3u lên GitHub
