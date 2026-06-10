@@ -138,7 +138,7 @@ class AllInOneIPTVTool:
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: NGUYÊN BẢN, 1 Luồng, Chờ 60s/Kênh, Cấu hình Windows.")
             if USE_AUTO_VN_PROXY:
-                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT. Sẽ test độ trễ (Ping) để chọn Proxy tốt nhất.")
+                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT. Sẽ kiểm tra Speedtest tới Server VTV.")
             if is_in_startup():
                 self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
 
@@ -196,10 +196,10 @@ class AllInOneIPTVTool:
                 self.startup_var.set(True)
 
     # ========================================================
-    # NÂNG CẤP: TÌM KIẾM PROXY VIỆT NAM CÓ ĐỘ TRỄ THẤP NHẤT
+    # HÀM MỚI: TÌM KIẾM PROXY VN NHANH NHẤT (SPEEDTEST)
     # ========================================================
     def _get_auto_vn_proxy(self):
-        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam...")
+        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam miễn phí...")
         try:
             url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -208,43 +208,42 @@ class AllInOneIPTVTool:
             
             if data:
                 proxies = [p.strip() for p in data.split('\r\n') if p.strip()]
-                self.log(f"   [Proxy] Lấy được {len(proxies)} IP. Tiến hành Ping kiểm tra độ trễ (Latency)...")
+                self.log(f"   [Proxy] Cào được {len(proxies)} IP. Tiến hành Sàng lọc & Đo tốc độ đến VTVGo...")
                 
-                working_proxies = []
-                # Test tối đa 15 IP để tìm được các máy chủ nhanh nhất
+                best_proxy = None
+                best_ping_time = 999.0
+                
+                # Sàng lọc 15 Proxy đầu tiên để tìm con nhanh nhất
                 for proxy in proxies[:15]:
-                    start_time = time.time()
                     try:
                         proxy_handler = urllib.request.ProxyHandler({'http': proxy, 'https': proxy})
                         opener = urllib.request.build_opener(proxy_handler)
                         
-                        # Bước 1: Check quốc gia (Phải là VN) - Timeout ngắn 3s
+                        # 1. Check xem có thật sự là VN và sống không (Timeout nhanh 3s)
                         check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-                        geo_res = opener.open(check_req, timeout=3)
-                        geo_data = json.loads(geo_res.read().decode('utf-8'))
+                        check_res = opener.open(check_req, timeout=3)
+                        geo_data = json.loads(check_res.read().decode('utf-8'))
                         
                         if geo_data.get("countryCode") == "VN":
-                            # Bước 2: Ping thẳng vào VTVGo để check tốc độ tải web thực tế - Timeout 5s
-                            vtv_req = urllib.request.Request("https://vtvgo.vn/", headers={'User-Agent': 'Mozilla/5.0'})
+                            # 2. Bắt đầu PING tốc độ tới VTVGo
+                            start_time = time.time()
+                            vtv_req = urllib.request.Request("https://vtvgo.vn", headers={'User-Agent': 'Mozilla/5.0'})
                             opener.open(vtv_req, timeout=5)
+                            response_time = time.time() - start_time
                             
-                            latency = time.time() - start_time
-                            working_proxies.append({'proxy': proxy, 'latency': latency, 'city': geo_data.get('city', 'VN')})
-                            self.log(f"   [Proxy] + Phản hồi tốt: {proxy} | Ping: {latency:.2f}s ({geo_data.get('city')})")
+                            self.log(f"   [Proxy] {proxy} (VN) | Phản hồi VTVGo: {response_time:.2f}s")
                             
-                            # Cào được 3 con ngon là dừng lại để tiết kiệm thời gian
-                            if len(working_proxies) >= 3:
-                                break
+                            if response_time < best_ping_time:
+                                best_ping_time = response_time
+                                best_proxy = proxy
                     except Exception:
-                        pass
-                
-                if working_proxies:
-                    # Sắp xếp danh sách Proxy theo độ trễ (Ping) thấp nhất đến cao nhất
-                    best_proxy = sorted(working_proxies, key=lambda x: x['latency'])[0]
-                    self.log(f"   [Proxy] 🏆 ĐÃ CHỌN PROXY TỐT NHẤT: {best_proxy['proxy']} (Ping: {best_proxy['latency']:.2f}s)")
-                    return best_proxy['proxy']
+                        pass # Lỗi hoặc Timeout -> Bỏ qua
+
+                if best_proxy:
+                    self.log(f"   [Proxy] ✅ ĐÃ CHỌN ĐƯỢC PROXY TỐI ƯU NHẤT: {best_proxy} (Độ trễ: {best_ping_time:.2f}s)")
+                    return best_proxy
                 else:
-                    self.log("   [Proxy] ⚠️ Toàn bộ Proxy lấy được đều chết hoặc phản hồi quá chậm.")
+                    self.log("   [Proxy] ⚠️ Các IP tìm được đều Timeout hoặc sai Location.")
             else:
                 self.log("   [Proxy] ⚠️ API không trả về Proxy nào lúc này.")
         except Exception as e:
@@ -252,6 +251,9 @@ class AllInOneIPTVTool:
         return None
     # ========================================================
 
+    # ========================================================
+    # SỬA: CẬP NHẬT ĐỂ LƯU GROUP CỦA KÊNH FALLBACK (HỖ TRỢ DOM FALLBACK)
+    # ========================================================
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -262,14 +264,21 @@ class AllInOneIPTVTool:
             with open(filepath, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             current_name = None
+            current_group = "Khác"
             for line in lines:
                 line = line.strip()
                 if line.startswith("#EXTINF"):
                     parts = line.split(',')
-                    if len(parts) > 1: current_name = parts[-1].strip()
+                    if len(parts) > 1: 
+                        current_name = parts[-1].strip()
+                        # Dùng Regex lấy lại tên Group cũ
+                        match_group = re.search(r'group-title="(.*?)"', line)
+                        if match_group: current_group = match_group.group(1)
                 elif line and not line.startswith("#") and current_name:
-                    old_links[current_name] = line
+                    # Chuyển đổi cấu trúc từ lưu string sang lưu Dict để giữ Group
+                    old_links[current_name] = {'url': line, 'group': current_group}
                     current_name = None
+                    current_group = "Khác"
             self.log(f"   [Debug] Đã nạp {len(old_links)} link từ file cũ làm Fallback.")
         except Exception as e: 
             self.log(f"   [Debug] Lỗi đọc file cũ: {e}")
@@ -299,6 +308,9 @@ class AllInOneIPTVTool:
         text = re.sub(r'\s+', '-', text).strip('-')
         return text
 
+    # ========================================================
+    # SỬA: MỞ RỘNG TỪ KHÓA BẮT LINK VTVGO & IN FULL URL LOG
+    # ========================================================
     def catch_m3u8_vtvgo(self, driver, url):
         try:
             self.log(f"      [Debug] Đang bắt đầu truy cập URL: {url}")
@@ -327,11 +339,12 @@ class AllInOneIPTVTool:
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
                             if '.m3u8' in req_url:
-                                # FIX: Hiển thị đầy đủ URL trong log, không dùng [:80] nữa
                                 self.log(f"      [Debug] Bắt được gói m3u8 bất kỳ: {req_url}")
                             
-                            # FIX: Mở rộng từ khóa lọc để bắt được các kênh địa phương (mediatech, truyenhinhso,...)
-                            if '.m3u8' in req_url and any(kw in req_url.lower() for kw in ['vtv', 'cdn', 'stream', 'live', 'truyenhinh', 'mediatech', 'playlist', 'index']):
+                            # Danh sách từ khóa đã mở rộng để hỗ trợ tất cả đài địa phương
+                            vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'index']
+                            
+                            if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
                                 return req_url, "OK"
                     except: continue
                 time.sleep(1)
@@ -365,9 +378,8 @@ class AllInOneIPTVTool:
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
                             if '.m3u8' in req_url:
-                                # FIX: Hiển thị đầy đủ URL trong log
                                 self.log(f"      [Debug] Bắt được gói m3u8 bất kỳ: {req_url}")
-                            
+                            # Giữ nguyên cấu trúc check uid của TV360 như yêu cầu
                             if '.m3u8' in req_url and 'uid=' in req_url:
                                 return req_url, "OK"
                     except: continue
@@ -403,7 +415,7 @@ class AllInOneIPTVTool:
                 self.log(f"⚠️ Trình duyệt ngầm đã được cấu hình Fake IP: {auto_proxy_ip}")
 
             driver = webdriver.Chrome(options=chrome_options)
-            driver.set_page_load_timeout(90)
+            driver.set_page_load_timeout(90) 
 
             # ==========================================
             # BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO
@@ -570,33 +582,26 @@ class AllInOneIPTVTool:
                 self.log("❌ Không quét được kênh nào từ DOM TV360.")
 
             # ==========================================
-            # BƯỚC 2.5: BỔ SUNG CÁC KÊNH TỪ FILE CŨ NẾU QUÉT DOM BỊ THIẾU
+            # BƯỚC ĐỆM: KHÔI PHỤC KÊNH BỊ THIẾU DO QUÉT DOM LỖI (DOM FALLBACK)
             # ==========================================
-            extracted_names = {ch['name'].lower() for ch in master_channels_list}
-            missing_count = 0
-            for old_name, old_link in old_links_dict.items():
-                if old_name.lower() not in extracted_names:
-                    # Tự động gán Group dựa vào tên kênh để không bị lỗi phân loại
-                    grp = "Khác"
-                    if "vtv" in old_name.lower(): grp = "VTV"
-                    elif "htv" in old_name.lower(): grp = "HTV"
-                    elif "vĩnh long" in old_name.lower() or "thvl" in old_name.lower(): grp = "Vĩnh Long"
-                    elif "sctv" in old_name.lower(): grp = "SCTV"
-
+            current_channel_names = [ch['name'] for ch in master_channels_list]
+            fallback_count = 0
+            for old_name, old_data in old_links_dict.items():
+                if old_name not in current_channel_names:
                     master_channels_list.append({
-                        'id': 'fallback',
+                        'id': 'fallback_dom',
                         'name': old_name,
                         'logo': '',
-                        'group_name': grp,
+                        'group_name': old_data.get('group', 'Khác'),
                         'source': 'fallback_only',
                         'url': '',
-                        'm3u8_link': old_link,
+                        'm3u8_link': old_data['url'],
                         'error_msg': None,
                         'skip': False
                     })
-                    missing_count += 1
-            if missing_count > 0:
-                self.log(f"-> DOM Fallback: Đã bổ sung tự động {missing_count} kênh từ file cũ do quét DOM web bị thiếu.")
+                    fallback_count += 1
+            if fallback_count > 0:
+                self.log(f"   [Debug] Đã khôi phục {fallback_count} kênh từ file cũ do DOM Web không hiển thị.")
 
             # ==========================================
             # BƯỚC 3: DEEP SCAN M3U8 CHO CÁC KÊNH DYNAMIC (1 LUỒNG NHƯ CŨ)
@@ -612,7 +617,7 @@ class AllInOneIPTVTool:
                             ch['m3u8_link'] = found_link
                             self.log(f"   [{idx}/{len(dynamic_channels)}] VTVGo: {ch['name']} -> ✅ OK (Mới)")
                         elif ch['name'] in old_links_dict:
-                            ch['m3u8_link'] = old_links_dict[ch['name']]
+                            ch['m3u8_link'] = old_links_dict[ch['name']]['url'] # Đã fix cấu trúc dictionary
                             self.log(f"   [{idx}/{len(dynamic_channels)}] VTVGo: {ch['name']} -> ⚠️ OK (Fallback)")
                         else:
                             ch['error_msg'] = status_msg
@@ -628,7 +633,7 @@ class AllInOneIPTVTool:
                             ch['m3u8_link'] = found_link
                             self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ✅ OK (Mới)")
                         elif ch['name'] in old_links_dict:
-                            ch['m3u8_link'] = old_links_dict[ch['name']]
+                            ch['m3u8_link'] = old_links_dict[ch['name']]['url'] # Đã fix cấu trúc dictionary
                             self.log(f"   [{idx}/{len(dynamic_channels)}] TV360: {ch['name']} -> ⚠️ OK (Fallback)")
                         else:
                             ch['error_msg'] = status_msg
@@ -693,18 +698,20 @@ class AllInOneIPTVTool:
                     error_info = ch.get('error_msg', 'Không rõ')
                     m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
             
+            # Khôi phục nguyên vẹn link cho các kênh nằm ngoài vùng phủ sóng của web
             elif ch['source'] == 'fallback_only':
-                if ch['m3u8_link']:
-                    m3u_content += f"{ch['m3u8_link']}\n"
+                m3u_content += f"{ch['m3u8_link']}\n"
             
         file_path = self.get_file_path()
         try:
             self.log(f"   [Debug] Đang tiến hành ghi file vào đường dẫn: {file_path}")
             
-            # FIX LỖI [WinError 3] The system cannot find the path specified: ''
-            file_dir = os.path.dirname(file_path)
-            if file_dir: 
-                os.makedirs(file_dir, exist_ok=True)
+            # ========================================================
+            # SỬA LỖI [WinError 3] BẰNG CÁCH KIỂM TRA ĐƯỜNG DẪN CHA
+            # ========================================================
+            dir_name = os.path.dirname(file_path)
+            if dir_name: 
+                os.makedirs(dir_name, exist_ok=True)
                 
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(m3u_content)
