@@ -1,8 +1,8 @@
-name: Tự Động Cập Nhật M3U (3 Giờ/Lần)
+name: Tự Động Cập Nhật M3U (1 Giờ/Lần)
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '0 */1 * * *'
   workflow_dispatch:
 
 jobs:
