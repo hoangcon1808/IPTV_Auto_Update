@@ -7,8 +7,8 @@ import os
 import json
 import re
 import urllib.request
+import concurrent.futures
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -194,7 +194,6 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
-    # Helper tạo WebDriver để tránh lặp code
     def _create_driver(self, proxy_ip=None):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new") 
@@ -207,36 +206,8 @@ class AllInOneIPTVTool:
         if proxy_ip:
             chrome_options.add_argument(f'--proxy-server=http://{proxy_ip}')
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(90) # Tăng timeout tải trang lên 90 giây để kiên nhẫn hơn với proxy chậm
+        driver.set_page_load_timeout(90) # Tăng timeout load web lên 90s vì proxy rất rùa
         return driver
-
-    # ========================================================
-    # KIẾN TRÚC MỚI: HÀM CÀO & PING PROXY THEO YÊU CẦU ĐÍCH
-    # ========================================================
-    def _validate_single_proxy(self, ip, source, target_url):
-        try:
-            proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
-            opener = urllib.request.build_opener(proxy_handler)
-            
-            # Check 1: VN IP
-            check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-            check_res = opener.open(check_req, timeout=5) # Cho phép tối đa 5 giây phản hồi
-            geo_data = json.loads(check_res.read().decode('utf-8'))
-            
-            if geo_data.get("countryCode") == "VN":
-                # Check 2: Đích thực tế (Ping 2 lần liên tục để lấy kết quả trung bình chính xác)
-                pings = []
-                for _ in range(2):
-                    start_time = time.time()
-                    req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    opener.open(req, timeout=8) # Kiên nhẫn hơn với đích thực tế khi kết nối proxy
-                    pings.append(time.time() - start_time)
-                
-                avg_ping = sum(pings) / len(pings)
-                return (avg_ping, ip, source)
-        except Exception:
-            pass
-        return None
 
     def _find_best_proxy(self, target_name="vtv", exclude_ip=None):
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO DANH SÁCH PROXY MỚI ĐỂ PHỤC VỤ {target_name.upper()}...")
@@ -271,7 +242,7 @@ class AllInOneIPTVTool:
 
         driver = None
         try:
-            driver = self._create_driver() # Khởi động trình duyệt ko proxy để cào web
+            driver = self._create_driver() 
             
             try:
                 driver.get("https://free-proxy-list.net/")
@@ -289,7 +260,7 @@ class AllInOneIPTVTool:
 
             try:
                 driver.get("https://spys.one/free-proxy-list/VN/")
-                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
+                WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
                 js_extract = """
                     var results = [];
                     var elements = document.querySelectorAll('font.spy14');
@@ -320,36 +291,64 @@ class AllInOneIPTVTool:
             self.log(f"   [Proxy] ❌ Không cào được danh sách mới nào cho {target_name.upper()}.")
             return None
 
-        # Thiết lập URL đích để PING
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
         self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu PING đa luồng tới {target_url}...")
 
         working_proxies = []
         
-        # SỬ DỤNG THREADPOOL ĐỂ KIỂM TRA ĐỒNG THỜI NHANH CHÓNG
-        with ThreadPoolExecutor(max_workers=15) as executor:
-            futures = {
-                executor.submit(self._validate_single_proxy, ip, source, target_url): ip 
-                for ip, source in unique_proxies.items() 
-                if ip != exclude_ip
-            }
-            for future in as_completed(futures):
+        # BƯỚC 1: Ping đa luồng vào web đích để xem proxy nào còn sống
+        def ping_target_web(ip, source):
+            if ip == exclude_ip: return None
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+                opener = urllib.request.build_opener(proxy_handler)
+                start_time = time.time()
+                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+                opener.open(req, timeout=10) # Timeout 10s cho web đích
+                ping = time.time() - start_time
+                return (ping, ip, source)
+            except Exception:
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+            futures = [executor.submit(ping_target_web, ip, source) for ip, source in unique_proxies.items()]
+            for future in concurrent.futures.as_completed(futures):
                 result = future.result()
                 if result:
                     working_proxies.append(result)
 
-        if working_proxies:
-            working_proxies.sort(key=lambda x: x[0])
-            best = working_proxies[0]
-            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Ping trung bình: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
-            return best[1]
-        else:
+        if not working_proxies:
             self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết khi truy cập {target_name.upper()}.")
             return None
 
-    # ========================================================
-    # CÁC HÀM XỬ LÝ DỮ LIỆU CŨ & TIỆN ÍCH
-    # ========================================================
+        # BƯỚC 2: Sắp xếp theo ping nhanh nhất, sau đó lần lượt check IP VN 
+        # Cách này đảm bảo check ít nhất có thể -> Chống Rate Limit API
+        working_proxies.sort(key=lambda x: x[0])
+        best_ip = None
+        
+        self.log(f"   [Proxy] Lọc được {len(working_proxies)} IP có thể truy cập. Đang check IP Việt Nam...")
+        for ping_time, ip, source in working_proxies:
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+                opener = urllib.request.build_opener(proxy_handler)
+                check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+                check_res = opener.open(check_req, timeout=3)
+                geo_data = json.loads(check_res.read().decode('utf-8'))
+                
+                if geo_data.get("countryCode") == "VN":
+                    best_ip = ip
+                    self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN: {ip} (Ping: {ping_time:.2f}s) - Nguồn: [{source}]")
+                    break # Dừng ngay khi tìm thấy 1 IP VN để tránh Rate limit
+            except Exception:
+                pass
+            time.sleep(0.3) # Nghỉ nhẹ giữa các lần check API để tránh 429 nếu IP trước xịt
+
+        if best_ip:
+            return best_ip
+        else:
+            self.log(f"   [Proxy] ❌ Không tìm thấy IP nào thuộc Việt Nam trong số các Proxy còn sống.")
+            return None
+
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -412,14 +411,14 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for i in range(90): # Tăng lên 90 giây để kiên nhẫn hơn với proxy chậm
+            for i in range(90):  # Nâng lên 90s do proxy chậm
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
                         log_data = json.loads(entry['message'])['message']
                         if 'Network.requestWillBeSent' in log_data['method']:
                             req_url = log_data['params']['request']['url']
-                            vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'index']
+                            vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'manifest']
                             if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
                                 return req_url, "OK"
                     except: continue
@@ -438,7 +437,7 @@ class AllInOneIPTVTool:
             try: driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for i in range(90): # Tăng lên 90 giây để kiên nhẫn hơn với proxy chậm
+            for i in range(90): # Nâng lên 90s do proxy chậm
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -453,9 +452,6 @@ class AllInOneIPTVTool:
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # ========================================================
-    # LÕI ĐIỀU HƯỚNG MỚI: TÁCH RIÊNG VTV VÀ TV360, CÀO & KIỂM LỖI TẠI CHỖ
-    # ========================================================
     def extract_all_data(self):
         self.save_settings() 
         old_links_dict = self.load_old_m3u_links()
@@ -463,7 +459,7 @@ class AllInOneIPTVTool:
         vtv_channels = []
         tv360_channels = []
         
-        vtv_token, vtv_ts = None, None
+        vtv_master_link = None # Thay thế cho vtv_token
         tv360_dom_scraped = False
         
         # ---------------------------------------------------------
@@ -477,14 +473,10 @@ class AllInOneIPTVTool:
             self.log(f"▶ LƯỢT 1 VTV: Mở trình duyệt (Proxy: {vtv_p1})")
             driver = self._create_driver(vtv_p1)
             
-            # Cào Kênh VTV
             try:
                 driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
                 time.sleep(3) 
-                try: driver.execute_script("var v=document.getElementsByTagName('video'); if(v.length>0) v[0].play();")
-                except: pass
-                time.sleep(2)
-
+                
                 page_source = driver.page_source
                 match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
                 if match:
@@ -505,31 +497,24 @@ class AllInOneIPTVTool:
                                 })
             except: pass
 
-            # Lấy Token VTV Lượt 1
-            m3u8_url = None
-            for i in range(90): # Tăng lên 90 giây
-                logs = driver.get_log('performance')
-                for entry in logs:
-                    try:
-                        log_data = json.loads(entry['message'])['message']
-                        if 'Network.requestWillBeSent' in log_data['method']:
-                            req_url = log_data['params']['request']['url']
-                            if '.m3u8' in req_url and 'vtvdigital.vn' in req_url and '/manifest/' in req_url:
-                                m3u8_url = req_url
-                                break
-                    except: continue
-                if m3u8_url: break
-                time.sleep(1)
-
-            if m3u8_url:
-                parts = m3u8_url.split('/')
-                vtv_token, vtv_ts = parts[3], parts[4]
-                self.log(f"   ✅ Lượt 1: Bắt Token VTV thành công: {vtv_token[:8]}...")
+            # --- Cào Master Link VTV thông qua kênh VTV1 (Không tách Token) ---
+            self.log("   [VTV] Tiến hành cào Link M3U8 gốc qua VTV1...")
+            f_link, s_msg = self.catch_m3u8_vtvgo(driver, "https://vtvgo.vn/channel/vtv1-1,1.html")
+            
+            if f_link:
+                vtv_master_link = f_link
+                # Ghi đè link cho VTV1 luôn để khỏi load lại
+                for ch in vtv_channels:
+                    if ch['name'].upper() == "VTV1":
+                        ch['m3u8_link'] = f_link
+                        ch['skip'] = True 
+                        break
+                self.log(f"   ✅ Lượt 1: Đã bắt được Link Gốc VTV thành công.")
             else:
-                self.log("   ❌ Lượt 1: Không bắt được Token VTV.")
+                self.log("   ❌ Lượt 1: Không bắt được link VTV1.")
 
-            # Cào Dynamic VTV
-            vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic']
+            # Cào Dynamic VTV (Địa phương)
+            vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
             for idx, ch in enumerate(vtv_dynamic, 1):
                 f_link, s_msg = self.catch_m3u8_vtvgo(driver, ch['url'])
                 if f_link:
@@ -541,38 +526,28 @@ class AllInOneIPTVTool:
 
             driver.quit()
 
-            # --- LƯỢT 2 VTV (NẾU CÓ LỖI HOẶC KHÔNG CÓ TOKEN) ---
-            if (not vtv_token or vtv_failed_dynamic) and USE_AUTO_VN_PROXY:
+            # --- LƯỢT 2 VTV (NẾU CÓ LỖI) ---
+            if (not vtv_master_link or vtv_failed_dynamic) and USE_AUTO_VN_PROXY:
                 self.log("\n⚠️ VTV LƯỢT 1 CÓ LỖI. Khởi động quy trình cứu hộ LƯỢT 2...")
-                vtv_p2 = self._find_best_proxy("vtv", exclude_ip=vtv_p1) # Ép tìm list mới & tránh IP cũ
+                vtv_p2 = self._find_best_proxy("vtv", exclude_ip=vtv_p1) 
                 
                 if vtv_p2:
                     self.log(f"▶ LƯỢT 2 VTV: Mở trình duyệt (Proxy: {vtv_p2})")
                     driver2 = self._create_driver(vtv_p2)
                     
-                    if not vtv_token:
-                        driver2.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                        time.sleep(3)
-                        m3u8_url = None
-                        for i in range(90): # Tăng lên 90 giây cho cứu hộ
-                            logs = driver2.get_log('performance')
-                            for entry in logs:
-                                try:
-                                    log_data = json.loads(entry['message'])['message']
-                                    if 'Network.requestWillBeSent' in log_data['method']:
-                                        req_url = log_data['params']['request']['url']
-                                        if '.m3u8' in req_url and 'vtvdigital.vn' in req_url and '/manifest/' in req_url:
-                                            m3u8_url = req_url
-                                            break
-                                except: continue
-                            if m3u8_url: break
-                            time.sleep(1)
+                    # Cứu Link Gốc
+                    if not vtv_master_link:
+                        self.log("   [Cứu VTV] Thử bắt lại Link Gốc qua VTV1...")
+                        f_link, s_msg = self.catch_m3u8_vtvgo(driver2, "https://vtvgo.vn/channel/vtv1-1,1.html")
+                        if f_link:
+                            vtv_master_link = f_link
+                            self.log(f"   ✅ Lượt 2: Đã cứu Link Gốc VTV thành công.")
+                            for ch in vtv_channels:
+                                if ch['name'].upper() == "VTV1":
+                                    ch['m3u8_link'] = f_link
+                                    break
 
-                        if m3u8_url:
-                            parts = m3u8_url.split('/')
-                            vtv_token, vtv_ts = parts[3], parts[4]
-                            self.log(f"   ✅ Lượt 2: Đã cứu Token VTV thành công: {vtv_token[:8]}...")
-
+                    # Cứu Link Động
                     for ch in vtv_failed_dynamic:
                         f_link, s_msg = self.catch_m3u8_vtvgo(driver2, ch['url'])
                         if f_link:
@@ -584,49 +559,50 @@ class AllInOneIPTVTool:
                     driver2.quit()
 
         # ---------------------------------------------------------
-        # CHU TRÌNH 2: TV360 (DOM tĩnh - bỏ cuộn trang tải chậm, lọc VIP trực tiếp)
+        # CHU TRÌNH 2: TV360
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
         tv360_failed_dynamic = []
         tv360_p1 = self._find_best_proxy("tv360") if USE_AUTO_VN_PROXY else None
         
-        # JS Extractor thông minh: Đọc chuẩn Section Title và Lọc trực tiếp class VIP (.css-1hssde8), bóc logo từ srcset khi chưa load xong
         js_extractor_smart = """
             var results = [];
             var sections = document.querySelectorAll('.container-section');
             for (var i = 0; i < sections.length; i++) {
                 var h2 = sections[i].querySelector('h2');
                 if (!h2) continue;
-                var targetGroup = h2.innerText.trim();
+                
+                var exactGroupName = h2.innerText.trim();
+                var gnLower = exactGroupName.toLowerCase();
+                
+                // Chỉ lấy chính xác các nhóm được phép trước đây
+                if (!gnLower.includes("vĩnh long") && !gnLower.includes("htv") && !gnLower.includes("vtv cab")) {
+                    continue;
+                }
 
                 var links = sections[i].querySelectorAll('a');
                 for (var j = 0; j < links.length; j++) {
                     var href = links[j].href;
                     if (href.includes('/tv/') && href.includes('ch=')) {
-                        // LỌC KÊNH VIP/TRẢ PHÍ NGAY TẠI DOM ĐỂ TRÁNH QUÉT MẤT THỜI GIAN
-                        var isPremium = links[j].querySelector('.css-1hssde8') !== null;
-                        if (isPremium) continue;
+                        
+                        // CƠ CHẾ LỌC VIP TẠI DOM: 
+                        // Dựa vào phân tích cấu trúc DOM tĩnh của TV360, các kênh VIP 
+                        // thường đính kèm badge icon cbac622c276c.png hoặc chứa chữ VIP.
+                        var innerHTML = links[j].innerHTML.toLowerCase();
+                        if (innerHTML.includes('cbac622c276c.png') || innerHTML.includes('vip-badge')) {
+                            continue; // Bỏ qua kênh thu phí
+                        }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
                         var img = links[j].querySelector('img');
-                        var logoUrl = '';
-                        if (img) {
-                            logoUrl = img.src;
-                            // Nếu đang trong trạng thái lazy-load, lấy link từ srcset
-                            if (logoUrl.startsWith('data:image') && img.getAttribute('srcset')) {
-                                var srcset = img.getAttribute('srcset');
-                                var match = srcset.match(/https?:\/\/[^\\s]+/);
-                                if (match) logoUrl = match[0];
-                            }
-                        }
                         try {
                             var urlObj = new URL(href);
                             results.push({
                                 id: urlObj.searchParams.get('ch'),
                                 slug: urlObj.pathname.split('/').pop(),
                                 name: name || urlObj.pathname.split('/').pop(),
-                                logo: logoUrl,
-                                group_name: targetGroup, 
+                                logo: img ? img.src : '',
+                                group_name: exactGroupName, 
                                 link: href
                             });
                         } catch(e) {}
@@ -645,10 +621,10 @@ class AllInOneIPTVTool:
             self.log(f"▶ LƯỢT 1 TV360: Mở trình duyệt (Proxy: {tv360_p1})")
             driver = self._create_driver(tv360_p1)
             
-            # Cào DOM TV360 (Tải DOM tĩnh cực kỳ nhanh chóng)
+            # Cào DOM TV360 tĩnh (Không cần lazy load)
             try:
                 driver.get("https://tv360.vn/tv")
-                time.sleep(3) # Đợi tải HTML cơ bản
+                time.sleep(3) # Chỉ cần đợi load xong là đủ
                 
                 dom_list = driver.execute_script(js_extractor_smart)
                 if dom_list:
@@ -667,7 +643,7 @@ class AllInOneIPTVTool:
                 f_link, s_msg = self.catch_m3u8_tv360(driver, ch['url'])
                 if s_msg == "PREMIUM":
                     ch['skip'] = True
-                    self.log(f"   [TV360] {ch['name']} -> 💰 Thu phí")
+                    self.log(f"   [TV360] {ch['name']} -> 💰 Thu phí (Lọt lưới DOM)")
                 elif f_link:
                     ch['m3u8_link'] = f_link
                     self.log(f"   [TV360] {ch['name']} -> ✅ OK")
@@ -699,7 +675,7 @@ class AllInOneIPTVTool:
                                     'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
                                 }
                                 tv360_channels.append(new_ch)
-                                tv360_failed_dynamic.append(new_ch) # Ném vào list để cào link luôn
+                                tv360_failed_dynamic.append(new_ch) 
                             self.log(f"   -> Lượt 2: Cứu DOM TV360 được {len(dom_list2)} kênh.")
 
                     for ch in tv360_failed_dynamic:
@@ -720,9 +696,9 @@ class AllInOneIPTVTool:
         self.log("\n🛡️ KIỂM TRA LỚP BẢO VỆ FALLBACK CUỐI CÙNG...")
         master_channels_list = vtv_channels + tv360_channels
 
-        if not vtv_token:
+        if not vtv_master_link:
             for ch in master_channels_list:
-                if ch['source'] == 'vtvgo_static':
+                if ch['source'] == 'vtvgo_static' and not ch.get('skip'):
                     if ch['name'] in old_links_dict:
                         ch['source'] = 'fallback_only'
                         ch['m3u8_link'] = old_links_dict[ch['name']]['url']
@@ -742,9 +718,9 @@ class AllInOneIPTVTool:
                 if ch['name'] in old_links_dict:
                     ch['m3u8_link'] = old_links_dict[ch['name']]['url']
 
-        return vtv_token, vtv_ts, master_channels_list
+        return vtv_master_link, master_channels_list
 
-    def generate_m3u(self, vtv_token, vtv_ts, master_channels_list):
+    def generate_m3u(self, vtv_master_link, master_channels_list):
         official_vtv_group = "Kênh VTV" 
         for ch in master_channels_list:
             if ch['name'].upper() == "VTV1":
@@ -771,7 +747,7 @@ class AllInOneIPTVTool:
         m3u_content = "#EXTM3U\n"
         
         for ch in master_channels_list:
-            if ch.get('skip'): continue 
+            if ch.get('skip') and not ch.get('m3u8_link'): continue 
             
             ch_id = ch['id']
             ch_name = ch['name']
@@ -779,9 +755,12 @@ class AllInOneIPTVTool:
             
             m3u_content += f'#EXTINF:-1 tvg-id="{ch_name}" tvg-logo="{ch["logo"]}" group-title="{group_name}", {ch_name}\n'
             
+            if ch.get('m3u8_link') and ch['source'] != 'fallback_only':
+                 m3u_content += f"{ch['m3u8_link']}\n"
+                 continue
+
             if ch['source'] == 'vtvgo_static':
-                if not vtv_token: continue
-                base_url = f"https://vtvgolive-ssaimh.vtvdigital.vn/{vtv_token}/{vtv_ts}/manifest"
+                if not vtv_master_link: continue
                 
                 if 'vtv' in group_name.lower() and 'sctv' not in group_name.lower():
                     if ch_id == "13": folder_id = "vtv6tt"
@@ -790,16 +769,18 @@ class AllInOneIPTVTool:
                         num = int(ch_id)
                         if num <= 6: folder_id = f"vtv{num}"
                         else: folder_id = self.get_vtv_acronym(ch_name)
-                    m3u_content += f"{base_url}/{folder_id}/master.m3u8\n"
+                    
+                    # TUYỆT KỸ CẮT GHÉP (REPLACE) THƯ MỤC KÊNH TRỰC TIẾP TỪ LINK GỐC
+                    # Regex sẽ tìm đoạn "/manifest/<tên_gì_đó_như_vtv1>/" và thay bằng "/manifest/<folder_id_mới>/"
+                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
+                    m3u_content += f"{new_link}\n"
                 else:
-                    m3u_content += f"{base_url}/{ch_id}/master.m3u8\n"
+                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
+                    m3u_content += f"{new_link}\n"
                     
             elif ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic'):
-                if ch['m3u8_link']:
-                    m3u_content += f"{ch['m3u8_link']}\n"
-                else:
-                    error_info = ch.get('error_msg', 'Không rõ')
-                    m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
+                error_info = ch.get('error_msg', 'Không rõ')
+                m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
             
             elif ch['source'] == 'fallback_only':
                 m3u_content += f"{ch['m3u8_link']}\n"
@@ -822,9 +803,9 @@ class AllInOneIPTVTool:
         if not self.headless:
             self.btn_manual.config(state="disabled")
             
-        tk_val, ts_val, channels_data = self.extract_all_data()
+        vtv_master, channels_data = self.extract_all_data()
         if channels_data:
-            self.generate_m3u(tk_val, ts_val, channels_data)
+            self.generate_m3u(vtv_master, channels_data)
             
         if not self.headless:
             self.btn_manual.config(state="normal")
@@ -834,9 +815,9 @@ class AllInOneIPTVTool:
 
     def run_update_process_headless(self):
         self.log("=== BẮT ĐẦU CHẠY NGẦM GITHUB (WIN MODE) ===")
-        tk_val, ts_val, channels_data = self.extract_all_data()
+        vtv_master, channels_data = self.extract_all_data()
         if channels_data:
-            self.generate_m3u(tk_val, ts_val, channels_data)
+            self.generate_m3u(vtv_master, channels_data)
         self.log("=== KẾT THÚC CHẠY NGẦM ===")
 
 if __name__ == "__main__":
