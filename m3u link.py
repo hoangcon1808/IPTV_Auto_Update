@@ -99,8 +99,7 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        self.vtv_raw_proxies = []
-        self.tv360_raw_proxies = []
+        self.vn_proxies = [] # Lưu danh sách IP Việt Nam tổng (Tiền xử lý)
         self.global_proxies_prepared = False
         
         if self.headless:
@@ -139,10 +138,10 @@ class AllInOneIPTVTool:
             self.log_area.grid(row=3, column=0, columnspan=2, padx=10, pady=5)
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
-            self.log("✅ Chế độ: Đảo IP Tự động (Fallback) + Timeout Leo Thang.")
-            self.log("✅ Workflow Proxy: Check Geo (Multi) -> Nháp (Single) -> Deep (Single).")
+            self.log("✅ Chế độ: Đảo Proxy Vô hạn (Infinite Proxy Rotation) & Lùi 3 Bước.")
+            self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s).")
             if USE_AUTO_VN_PROXY:
-                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT.")
+                self.log("✅ Chế độ Auto-Scrape Proxy từ TheSpeedX đang BẬT.")
 
     def get_file_path(self):
         if self.headless:
@@ -197,7 +196,7 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
-    def _create_driver(self, proxy_ip=None):
+    def _create_driver(self, proxy_ip=None, protocol="http"):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new") 
         chrome_options.add_argument("--mute-audio")
@@ -206,250 +205,141 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         if proxy_ip:
-            chrome_options.add_argument(f'--proxy-server=http://{proxy_ip}')
+            if protocol == "http":
+                chrome_options.add_argument(f'--proxy-server=http://{proxy_ip}')
+            else:
+                # Nếu là socks4/socks5 thì gán tiền tố tương ứng để chrome hiểu
+                chrome_options.add_argument(f'--proxy-server={protocol}://{proxy_ip}')
+                
         driver = webdriver.Chrome(options=chrome_options)
         return driver
 
-    def _reboot_driver(self, driver, proxy_ip=None):
+    def _reboot_driver(self, driver, proxy_ip=None, protocol="http"):
         if driver:
             try:
                 driver.execute_cdp_cmd('Network.clearBrowserCache', {})
                 driver.execute_cdp_cmd('Network.clearBrowserCookies', {})
                 driver.quit()
             except: pass
-        return self._create_driver(proxy_ip)
+        return self._create_driver(proxy_ip, protocol)
 
     # ========================================================
-    # TIỀN XỬ LÝ: CHUẨN BỊ GLOBAL PROXIES (CHỈ CHẠY 1 LẦN DUY NHẤT)
+    # GIAI ĐOẠN 1: TẢI THE SPEEDX & LỌC QUỐC GIA (CHẠY 1 LẦN)
     # ========================================================
     def _prepare_global_proxies(self):
         if not USE_AUTO_VN_PROXY: return
-        self.log("\n[GIAI ĐOẠN 1] 🔎 ĐANG CÀO PROXY TỪ 9 NGUỒN...")
-        proxy_pool = []
-
-        # --- CÁC NGUỒN API TEXT/JSON ---
-        try:
-            req = urllib.request.Request("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all", headers={'User-Agent': 'Mozilla/5.0'})
-            data = urllib.request.urlopen(req, timeout=10).read().decode('utf-8').strip()
-            for p in data.split('\r\n'):
-                if p.strip(): proxy_pool.append({'ip': p.strip(), 'source': 'API ProxyScrape'})
-            self.log("      [Scrape] Nguồn 1 (ProxyScrape): Xong.")
-        except: pass
-
-        try:
-            req = urllib.request.Request("https://proxylist.geonode.com/api/proxy-list?country=VN&protocols=http%2Chttps&limit=50&page=1&sort_by=lastChecked&sort_type=desc", headers={'User-Agent': 'Mozilla/5.0'})
-            data = json.loads(urllib.request.urlopen(req, timeout=10).read().decode('utf-8'))
-            for item in data.get('data', []):
-                if item.get('ip') and item.get('port'):
-                    proxy_pool.append({'ip': f"{item['ip']}:{item['port']}", 'source': 'API Geonode'})
-            self.log("      [Scrape] Nguồn 2 (Geonode): Xong.")
-        except: pass
-
-        try:
-            req = urllib.request.Request("https://www.proxy-list.download/api/v1/get?type=http&country=VN", headers={'User-Agent': 'Mozilla/5.0'})
-            data = urllib.request.urlopen(req, timeout=10).read().decode('utf-8').strip()
-            for p in data.split('\r\n'):
-                if p.strip(): proxy_pool.append({'ip': p.strip(), 'source': 'API ProxyList.Download'})
-            self.log("      [Scrape] Nguồn 3 (ProxyList.Download): Xong.")
-        except: pass
-
-        try:
-            req = urllib.request.Request("https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list", headers={'User-Agent': 'Mozilla/5.0'})
-            lines = urllib.request.urlopen(req, timeout=10).read().decode('utf-8').strip().split('\n')
-            for line in lines:
-                try:
-                    p_data = json.loads(line)
-                    if p_data.get("country") == "VN" and p_data.get("type") == "http":
-                        proxy_pool.append({'ip': f"{p_data['host']}:{p_data['port']}", 'source': 'API FateZero'})
-                except: continue
-            self.log("      [Scrape] Nguồn 4 (FateZero): Xong.")
-        except: pass
-
-        try:
-            req = urllib.request.Request("https://spys.me/proxy.txt", headers={'User-Agent': 'Mozilla/5.0'})
-            data = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
-            for line in data.split('\n'):
-                if 'VN' in line:
-                    match = re.search(r'^(\d{1,3}(?:\.\d{1,3}){3}:\d+)', line)
-                    if match: proxy_pool.append({'ip': match.group(1), 'source': 'API Spys.me'})
-            self.log("      [Scrape] Nguồn 5 (Spys.me): Xong.")
-        except: pass
-
-        try:
-            thespeedx_urls = [
-                "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt",
-                "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt",
-                "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"
-            ]
-            for sx_url in thespeedx_urls:
-                req = urllib.request.Request(sx_url, headers={'User-Agent': 'Mozilla/5.0'})
+        self.log("\n[GIAI ĐOẠN 1] 🔎 TẢI DANH SÁCH PROXY TỪ THESPEEDX VÀ LỌC IP VIỆT NAM...")
+        
+        raw_pool = []
+        sources = [
+            ("http", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"),
+            ("socks4", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks4.txt"),
+            ("socks5", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt")
+        ]
+        
+        for protocol, url in sources:
+            try:
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                 data = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
-                for p in data.split('\n'):
-                    if p.strip(): proxy_pool.append({'ip': p.strip(), 'source': 'API TheSpeedX'})
-            self.log("      [Scrape] Nguồn 6 (TheSpeedX - 3 Lists): Xong.")
-        except: pass
-
-        # --- NGUỒN CÀO QUA WEB SELENIUM ---
-        driver = None
-        try:
-            driver = self._create_driver() 
-            
-            try:
-                driver.get("https://free-proxy-list.net/")
-                time.sleep(1)
-                table_text = driver.find_element("tag name", "tbody").text
-                for line in table_text.split('\n'):
-                    if " VN " in line or "Vietnam" in line:
-                        match = re.search(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)(?!\d)', line)
-                        if match: proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB FreeProxy'})
-                self.log("      [Scrape] Nguồn 7 (Free-Proxy-List): Xong.")
-            except: pass
-
-            try:
-                driver.get("https://spys.one/free-proxy-list/VN/")
-                WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
-                js_extract = """
-                    var results = [];
-                    var elements = document.querySelectorAll('font.spy14');
-                    for(var i=0; i<elements.length; i++) {
-                        var txt = elements[i].innerText.trim();
-                        if(/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$/.test(txt)) results.push(txt);
-                    }
-                    return results;
-                """
-                matches = driver.execute_script(js_extract)
-                if matches:
-                    for ip_port in matches:
-                        proxy_pool.append({'ip': ip_port, 'source': 'WEB SpysOne'})
-                self.log("      [Scrape] Nguồn 8 (Spys.one): Xong.")
-            except: pass
-
-            try:
-                driver.get("https://www.proxynova.com/proxy-server-list/country-vn/")
-                time.sleep(3)
-                js_extract_nova = """
-                    var results = [];
-                    var rows = document.querySelectorAll('#tbl_proxy_list tbody tr');
-                    for(var i=0; i<rows.length; i++) {
-                        if (!rows[i].hasAttribute('data-proxy-id')) continue;
-                        var ipTd = rows[i].querySelector('td:nth-child(1)');
-                        var portTd = rows[i].querySelector('td:nth-child(2)');
-                        if(ipTd && portTd) {
-                            var ipText = ipTd.innerText.replace(/[^0-9\.]/g, '').trim();
-                            var portText = portTd.innerText.trim();
-                            if(ipText && portText) results.push(ipText + ':' + portText);
-                        }
-                    }
-                    return results;
-                """
-                matches = driver.execute_script(js_extract_nova)
-                if matches:
-                    for ip_port in matches:
-                        proxy_pool.append({'ip': ip_port, 'source': 'WEB ProxyNova'})
-                self.log("      [Scrape] Nguồn 9 (ProxyNova): Xong.")
-            except: pass
-
-        except: pass
-        finally:
-            if driver: driver.quit()
+                count = 0
+                for line in data.split('\n'):
+                    ip_port = line.strip()
+                    if ip_port:
+                        raw_pool.append({'ip': ip_port, 'protocol': protocol})
+                        count += 1
+                self.log(f"      [Tải File] TheSpeedX {protocol.upper()}: Lấy được {count} IPs.")
+            except Exception as e: 
+                self.log(f"      [Lỗi] Không tải được file {protocol}: {e}")
 
         # Lọc trùng lặp
         unique_proxies = {}
-        for p in proxy_pool:
+        for p in raw_pool:
             if p['ip'] not in unique_proxies:
-                unique_proxies[p['ip']] = p['source']
+                unique_proxies[p['ip']] = p['protocol']
 
-        self.log(f"\n   [Geo Filter] Đã gom {len(unique_proxies)} IPs. Bắt đầu Check Quốc Gia (Đa luồng)...")
-        vn_proxies = {}
+        self.log(f"   [Geo Filter] Tổng cộng {len(unique_proxies)} IPs duy nhất. Bắt đầu Check Đa Luồng IP Việt Nam...")
         
-        # Hàm hỗ trợ check VN IP đa luồng (GeoJS)
-        def check_geo(ip_port, source):
+        def check_geo(ip_port, protocol):
             ip_only = ip_port.split(':')[0]
             try:
                 url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                res = urllib.request.urlopen(req, timeout=5) # Tăng timeout nhẹ lên 5s
+                res = urllib.request.urlopen(req, timeout=5)
                 if json.loads(res.read().decode('utf-8')).get("country") == "VN":
-                    return (ip_port, source)
+                    return {'ip': ip_port, 'protocol': protocol}
             except: pass
             return None
 
-        # Chạy đa luồng mạnh (50 luồng) vì TheSpeedX trả về list rất dài
+        # GeoJS xử lý đa luồng rất mượt, ta dùng 50 luồng để check cho lẹ
         with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(check_geo, ip, source) for ip, source in unique_proxies.items()]
+            futures = [executor.submit(check_geo, ip, protocol) for ip, protocol in unique_proxies.items()]
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
-                if res: vn_proxies[res[0]] = res[1]
+                if res: 
+                    self.vn_proxies.append(res)
             
-        self.log(f"   [Raw Check] Lọc được {len(vn_proxies)} IP Việt Nam. Tạo danh sách thô (Ping Đơn luồng 10s)...")
-        
-        # Ping nháp đơn luồng tuần tự tạo list thô
-        for ip_port, source in vn_proxies.items():
-            try:
-                # Ping VTV
-                proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
-                opener = urllib.request.build_opener(proxy_handler)
-                req_vtv = urllib.request.Request("https://vtvgo.vn", headers={'User-Agent': 'Mozilla/5.0'})
-                start_time = time.time()
-                opener.open(req_vtv, timeout=10)
-                ping_time = time.time() - start_time
-                self.vtv_raw_proxies.append({'ip': ip_port, 'source': source, 'ping': ping_time, 'dead': False})
-                self.log(f"      [Nháp VTV] ✅ {ip_port} -> {ping_time:.2f}s")
-            except: pass
-            
-            try:
-                # Ping TV360
-                req_tv360 = urllib.request.Request("https://tv360.vn", headers={'User-Agent': 'Mozilla/5.0'})
-                start_time = time.time()
-                opener.open(req_tv360, timeout=10)
-                ping_time = time.time() - start_time
-                self.tv360_raw_proxies.append({'ip': ip_port, 'source': source, 'ping': ping_time, 'dead': False})
-                self.log(f"      [Nháp TV360] ✅ {ip_port} -> {ping_time:.2f}s")
-            except: pass
-            
-        self.log(f"   [Tổng kết Tiền Xử Lý] Danh sách thô VTV: {len(self.vtv_raw_proxies)} IPs | TV360: {len(self.tv360_raw_proxies)} IPs.")
+        self.log(f"   [Hoàn tất Tiền Xử Lý] Chắt lọc được {len(self.vn_proxies)} IP chuẩn Việt Nam làm kho đạn.")
         self.global_proxies_prepared = True
 
     # ========================================================
-    # GIAI ĐOẠN 2: CHỌN PROXY TỪ DANH SÁCH THÔ (ĐƠN LUỒNG 3 LẦN)
+    # GIAI ĐOẠN 2: TÌM PROXY THEO SERVER ĐÍCH (PING ĐƠN LUỒNG & EARLY EXIT)
     # ========================================================
-    def _get_next_alive_proxy(self, raw_proxies, platform, exclude=None):
-        target_url = "https://vtvgo.vn" if platform == "vtv" else "https://tv360.vn"
+    def _get_best_proxy_for_target(self, target_platform, exclude_set):
+        target_url = "https://vtvgo.vn" if target_platform == "vtv" else "https://tv360.vn"
+        self.log(f"\n   [Ping Server] Đang kiểm tra từng Proxy vào {target_url} (Timeout 10s)...")
         
-        for p in raw_proxies:
-            ip_port = p['ip']
-            if ip_port == exclude or p.get('dead'):
+        best_ip = None
+        best_protocol = "http"
+        best_ping = 999
+        
+        for proxy_data in self.vn_proxies:
+            ip_port = proxy_data['ip']
+            protocol = proxy_data['protocol']
+            
+            if ip_port in exclude_set:
                 continue
-            
-            self.log(f"      [Deep Test] Check chuyên sâu 3 lần IP: {ip_port}")
-            success_count = 0
-            proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
-            opener = urllib.request.build_opener(proxy_handler)
-            req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-            
-            for _ in range(3):
-                try:
-                    opener.open(req, timeout=10)
-                    success_count += 1
-                except: pass
-                time.sleep(0.5) 
                 
-            if success_count > 0:
-                self.log(f"         -> ✅ Tốt! Dùng IP: {ip_port}")
-                return ip_port
-            else:
-                self.log(f"         -> ❌ Chết ngắc! Đánh dấu bỏ qua vĩnh viễn.")
-                p['dead'] = True 
+            # Lưu ý: urllib chỉ hỗ trợ HTTP/HTTPS proxy trực tiếp.
+            # Với SOCKS từ TheSpeedX, ta phải trick giả vờ coi nó như HTTP.
+            # Rất nhiều proxy trên các list SOCKS của TheSpeedX thực chất có mở cả cổng HTTP.
+            # Nếu ko dùng đc urllib thì nó sẽ fail ping và bị bỏ qua, khá an toàn.
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
+                opener = urllib.request.build_opener(proxy_handler)
+                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+                start_time = time.time()
+                opener.open(req, timeout=10)
+                ping_time = time.time() - start_time
                 
-        return None
+                self.log(f"      -> ✅ Sống: {ip_port} | Giao thức: {protocol.upper()} | Ping: {ping_time:.2f}s")
+                
+                if ping_time < best_ping:
+                    best_ping = ping_time
+                    best_ip = ip_port
+                    best_protocol = protocol
+                    
+                # EARLY EXIT (Ra ngoài vòng lặp ngay nếu tìm thấy IP dưới 2 giây)
+                if ping_time < 2.0:
+                    self.log(f"   ⚡ Tốc độ ánh sáng (< 2s). Chọn ngay {ip_port}!")
+                    return best_ip, best_protocol
+                    
+            except Exception:
+                # Nếu timeout hoặc lỗi -> IP chết / Không hỗ trợ HTTP request -> Bỏ qua
+                continue
+                
+        if best_ip:
+            self.log(f"   🏆 Quét xong. Chốt IP tốt nhất: {best_ip} (Ping: {best_ping:.2f}s)")
+            return best_ip, best_protocol
+            
+        self.log(f"   ❌ Toàn bộ kho IP Việt Nam đều không ping được tới {target_url}.")
+        return None, "http"
 
     # ========================================================
-    # GIAI ĐOẠN 3: QUÉT KÊNH DYNAMIC KẾT HỢP ĐẢO PROXY THÔNG MINH
+    # GIAI ĐOẠN 3: CÀO KÊNH VÀ XOAY VÒNG PROXY VÔ HẠN
     # ========================================================
-    def _scan_channels_with_rotation(self, driver, channels, platform, old_links_dict, raw_proxies, initial_proxy):
+    def _scan_channels_with_rotation(self, driver, channels, platform, old_links_dict, exclude_set, current_proxy_ip, current_protocol):
         i = 0
         consecutive_fails = 0
-        current_proxy = initial_proxy
         timeouts = [60, 120, 240]
 
         while i < len(channels):
@@ -462,9 +352,9 @@ class AllInOneIPTVTool:
             f_link = None
             s_msg = ""
             
-            # Cơ chế Timeout leo thang (Escalating Timeouts)
+            # CƠ CHẾ TIMEOUT LEO THANG
             for t in timeouts:
-                self.log(f"      [{i+1}/{len(channels)}] {ch['name']} (Thử {t}s)...")
+                self.log(f"      [{i+1}/{len(channels)}] Cào kênh {ch['name']} (Chờ tối đa {t}s)...")
                 
                 if platform == 'vtv':
                     f_link, s_msg = self.catch_m3u8_vtvgo(driver, ch['url'], max_wait=t)
@@ -477,54 +367,59 @@ class AllInOneIPTVTool:
                 if f_link:
                     break 
 
-                self.log(f"         -> ❌ Timeout. Xoá Cache & Reboot trình duyệt...")
-                driver = self._reboot_driver(driver, current_proxy)
+                self.log(f"         -> ❌ Timeout. Xoá Cache & Khởi động lại trình duyệt...")
+                driver = self._reboot_driver(driver, current_proxy_ip, current_protocol)
 
-            # Xử lý kết quả
+            # XỬ LÝ KẾT QUẢ VÀ ĐẢO PROXY
             if f_link:
                 ch['m3u8_link'] = f_link
                 consecutive_fails = 0
                 self.log(f"         -> ✅ Lấy Link Thành Công")
                 i += 1
             elif ch.get('skip'):
-                self.log(f"         -> 💰 Kênh Premium. Bỏ qua.")
+                self.log(f"         -> 💰 Kênh Thu Phí. Bỏ qua.")
                 consecutive_fails = 0
                 i += 1
             else:
                 consecutive_fails += 1
-                # Tạm thời Fallback
+                
+                # Áp dụng Fallback tạm thời
                 if ch['name'] in old_links_dict:
                     ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                     ch['source'] = 'fallback_only'
-                    self.log(f"         -> ⚠️ Fallback từ file cũ thành công.")
+                    self.log(f"         -> ⚠️ Thất bại. Fallback lấy link từ file cũ thành công.")
                 else:
                     ch['error_msg'] = "Lỗi toàn tập"
-                    self.log(f"         -> ❌ Thất bại hoàn toàn.")
+                    self.log(f"         -> ❌ Thất bại hoàn toàn (Không có file cũ).")
 
-                # KIỂM TRA ĐẢO PROXY (FALLBACK IP) NẾU FAIL 3 LẦN LIÊN TIẾP
+                # KIỂM TRA QUAY LUI VÀ ĐỔI PROXY NẾU 3 KÊNH TẠCH LIÊN TIẾP
                 if consecutive_fails >= 3:
-                    self.log(f"\n   [CẢNH BÁO] 3 kênh liên tiếp thất bại. IP {current_proxy} có vẻ đã bị chặn/chết!")
+                    self.log(f"   [CẢNH BÁO] 3 kênh liên tiếp thất bại. IP {current_proxy_ip} đã bị chặn!")
+                    exclude_set.add(current_proxy_ip) # Vứt vào danh sách đen
                     
-                    new_proxy = self._get_next_alive_proxy(raw_proxies, platform=platform, exclude=current_proxy)
+                    self.log(f"   🔄 ĐANG TÌM PROXY MỚI THAY THẾ...")
+                    new_proxy_ip, new_protocol = self._get_best_proxy_for_target(platform, exclude_set)
 
-                    if new_proxy:
-                        self.log(f"   🔄 ĐỔI IP MỚI TỰ ĐỘNG: {new_proxy}. Đang tải lại và Quét lại 3 kênh bị lỗi...")
-                        current_proxy = new_proxy
-                        driver = self._reboot_driver(driver, current_proxy)
+                    if new_proxy_ip:
+                        self.log(f"   🔄 ĐỔI IP THÀNH CÔNG: {new_proxy_ip}. Đang quay lui 3 bước để cào lại...")
+                        current_proxy_ip = new_proxy_ip
+                        current_protocol = new_protocol
+                        driver = self._reboot_driver(driver, current_proxy_ip, current_protocol)
                         consecutive_fails = 0
 
-                        # Lùi lại tối đa 3 bước (hoặc về đầu list nếu list < 3)
+                        # Toán học quay lui: Lùi lại 3 kênh (Hoặc lùi về 0 nếu i < 3)
                         back_steps = 3
-                        i = max(0, i - back_steps + 1)
+                        start_rewind = max(0, i - back_steps + 1)
 
-                        # Dọn dẹp dữ liệu tạm (fallback) của 3 kênh này để quét lại
-                        for rewind_idx in range(i, i + back_steps):
-                            if rewind_idx < len(channels):
-                                channels[rewind_idx]['m3u8_link'] = None
-                                channels[rewind_idx]['source'] = f"{platform}go_dynamic" if platform == 'vtv' else f"{platform}_dynamic"
-                                channels[rewind_idx]['error_msg'] = None
+                        # Dọn dẹp dữ liệu rác của các kênh vừa bị đánh dấu fallback để cào lại bằng IP mới
+                        for rewind_idx in range(start_rewind, i + 1):
+                            channels[rewind_idx]['m3u8_link'] = None
+                            channels[rewind_idx]['source'] = channels[rewind_idx]['original_source']
+                            channels[rewind_idx]['error_msg'] = None
+                            
+                        i = start_rewind # Đặt lại con trỏ vòng lặp
                     else:
-                        self.log(f"   ❌ Hết sạch IP dự phòng trong kho. Bắt buộc đi tiếp với list Fallback file...")
+                        self.log(f"   ❌ Kho IP đã cạn kiệt. Chấp nhận số phận, tiếp tục cào bằng Fallback...")
                         consecutive_fails = 0 
                         i += 1
                 else:
@@ -648,15 +543,20 @@ class AllInOneIPTVTool:
         tv360_channels = []
         vtv_master_link = None 
         
+        # Danh sách đen lưu các Proxy đã tạch để không bao giờ chọn lại
+        exclude_proxies = set()
+        
         # ---------------------------------------------------------
         # CHU TRÌNH 1: VTVGO
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH VTV ======")
-        vtv_p = self._get_next_alive_proxy(self.vtv_raw_proxies, 'vtv') if USE_AUTO_VN_PROXY else None
+        vtv_ip, vtv_proto = None, "http"
+        if USE_AUTO_VN_PROXY:
+            vtv_ip, vtv_proto = self._get_best_proxy_for_target("vtv", exclude_proxies)
         
-        if vtv_p or not USE_AUTO_VN_PROXY:
-            self.log(f"▶ Mở trình duyệt (Proxy: {vtv_p})")
-            driver = self._create_driver(vtv_p)
+        if vtv_ip or not USE_AUTO_VN_PROXY:
+            self.log(f"▶ Mở trình duyệt (Proxy: {vtv_ip} - Giao thức: {vtv_proto.upper()})")
+            driver = self._create_driver(vtv_ip, vtv_proto)
             
             # --- 1. LẤY DOM VTV ---
             dom_success = False
@@ -681,7 +581,9 @@ class AllInOneIPTVTool:
                                     slug = self.create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
                                     vtv_channels.append({
                                         'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                                        'group_name': group.get('name', 'Khác'), 'source': src_type,
+                                        'group_name': group.get('name', 'Khác'), 
+                                        'source': src_type,
+                                        'original_source': src_type, # Lưu lại để reset khi quay lui
                                         'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
                                         'm3u8_link': None, 'error_msg': None, 'skip': False
                                     })
@@ -692,9 +594,9 @@ class AllInOneIPTVTool:
                 except: pass
                 
                 self.log(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
-                driver = self._reboot_driver(driver, vtv_p)
+                driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
 
-            # FALLBACK DOM VTV NẾU SẬP
+            # FALLBACK DOM VTV
             if not dom_success:
                 self.log("   [VTV] ⚠️ DOM thất bại hoàn toàn 3 lượt. Đang khôi phục từ file M3U cũ...")
                 for old_name, old_data in old_links_dict.items():
@@ -703,7 +605,8 @@ class AllInOneIPTVTool:
                         if 'vtvcab' in gn_lower: continue
                         vtv_channels.append({
                             'id': 'fallback', 'name': old_name, 'logo': '',
-                            'group_name': old_data.get('group', 'Khác'), 'source': 'fallback_only',
+                            'group_name': old_data.get('group', 'Khác'), 
+                            'source': 'fallback_only', 'original_source': 'fallback_only',
                             'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
                         })
                 self.log(f"      -> Đã khôi phục {len(vtv_channels)} kênh VTV từ file.")
@@ -724,13 +627,13 @@ class AllInOneIPTVTool:
                         break
                     else:
                         self.log(f"      -> ❌ Lỗi ({s_msg}). Khởi động lại trình duyệt xoá Cache...")
-                        driver = self._reboot_driver(driver, vtv_p)
+                        driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
 
             # --- 3. LẤY LINK DYNAMIC (ĐỊA PHƯƠNG) KÈM TỰ ĐỘNG ĐẢO PROXY ---
             vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
             if vtv_dynamic:
-                self.log(f"   [VTV] Bắt đầu duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương...")
-                driver = self._scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, self.vtv_raw_proxies, vtv_p)
+                self.log(f"   [VTV] Bắt đầu duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương (Đảo Proxy nếu Fail 3 kênh)...")
+                driver = self._scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, exclude_proxies, vtv_ip, vtv_proto)
                             
             driver.quit()
 
@@ -738,7 +641,9 @@ class AllInOneIPTVTool:
         # CHU TRÌNH 2: TV360
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
-        tv360_p = self._get_next_alive_proxy(self.tv360_raw_proxies, 'tv360') if USE_AUTO_VN_PROXY else None
+        tv360_ip, tv360_proto = None, "http"
+        if USE_AUTO_VN_PROXY:
+            tv360_ip, tv360_proto = self._get_best_proxy_for_target("tv360", exclude_proxies)
         
         js_extractor_smart = """
             var results = [];
@@ -759,16 +664,27 @@ class AllInOneIPTVTool:
                     var href = links[j].href;
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
-                        // CƠ CHẾ LỌC VIP TẠI DOM 
+                        // LỌC VIP CHUẨN XÁC QUA CẤU TRÚC DOM 
                         if (links[j].querySelector('.css-1hssde8')) {
-                            continue; 
+                            continue; // Có mặt class này là kênh Premium
                         }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
                         
-                        // KHÔI PHỤC LẤY LOGO THEO CÁCH GỐC (BỎ LAZY-LOAD)
+                        // FIX LỖI LOGO BASE64 LAZY LOAD
                         var img = links[j].querySelector('img');
-                        var logo = img ? img.src : '';
+                        var logo = '';
+                        if (img) {
+                            logo = img.getAttribute('src') || '';
+                            // Nếu src là base64, lấy link ảnh gốc từ thuộc tính srcset
+                            if (logo.includes('data:image') && img.hasAttribute('srcset')) {
+                                var srcsetStr = img.getAttribute('srcset');
+                                var firstUrl = srcsetStr.split(',')[0].trim().split(' ')[0];
+                                if (firstUrl) {
+                                    logo = firstUrl;
+                                }
+                            }
+                        }
                         
                         try {
                             var urlObj = new URL(href);
@@ -792,9 +708,9 @@ class AllInOneIPTVTool:
             return unique;
         """
 
-        if tv360_p or not USE_AUTO_VN_PROXY:
-            self.log(f"▶ Mở trình duyệt (Proxy: {tv360_p})")
-            driver = self._create_driver(tv360_p)
+        if tv360_ip or not USE_AUTO_VN_PROXY:
+            self.log(f"▶ Mở trình duyệt (Proxy: {tv360_ip} - Giao thức: {tv360_proto.upper()})")
+            driver = self._create_driver(tv360_ip, tv360_proto)
             
             # --- 1. LẤY DOM TV360 ---
             dom_success = False
@@ -810,7 +726,8 @@ class AllInOneIPTVTool:
                         for c in dom_list:
                             tv360_channels.append({
                                 'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                                'group_name': c.get('group_name'), 'source': 'tv360_dynamic',
+                                'group_name': c.get('group_name'), 
+                                'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
                                 'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
                             })
                         dom_success = True
@@ -819,9 +736,9 @@ class AllInOneIPTVTool:
                 except: pass
                 
                 self.log(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
-                driver = self._reboot_driver(driver, tv360_p)
+                driver = self._reboot_driver(driver, tv360_ip, tv360_proto)
 
-            # FALLBACK DOM TV360 NẾU SẬP
+            # FALLBACK DOM TV360
             if not dom_success:
                 self.log("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục từ file M3U cũ...")
                 for old_name, old_data in old_links_dict.items():
@@ -829,7 +746,8 @@ class AllInOneIPTVTool:
                     if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
                         tv360_channels.append({
                             'id': 'fallback', 'name': old_name, 'logo': '',
-                            'group_name': old_data.get('group', 'Khác'), 'source': 'fallback_only',
+                            'group_name': old_data.get('group', 'Khác'), 
+                            'source': 'fallback_only', 'original_source': 'fallback_only',
                             'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
                         })
                 self.log(f"      -> Đã khôi phục {len(tv360_channels)} kênh TV360 từ file.")
@@ -837,8 +755,8 @@ class AllInOneIPTVTool:
             # --- 2. LẤY LINK DYNAMIC TV360 KÈM ĐẢO PROXY ---
             channels_to_scan = [ch for ch in tv360_channels if ch['source'] == 'tv360_dynamic']
             if channels_to_scan:
-                self.log(f"   [TV360] Bắt đầu duyệt ngầm {len(channels_to_scan)} Kênh TV360...")
-                driver = self._scan_channels_with_rotation(driver, channels_to_scan, 'tv360', old_links_dict, self.tv360_raw_proxies, tv360_p)
+                self.log(f"   [TV360] Bắt đầu duyệt ngầm {len(channels_to_scan)} Kênh TV360 (Đảo Proxy nếu Fail 3 kênh)...")
+                driver = self._scan_channels_with_rotation(driver, channels_to_scan, 'tv360', old_links_dict, exclude_proxies, tv360_ip, tv360_proto)
             
             driver.quit()
 
