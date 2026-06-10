@@ -369,65 +369,75 @@ class AllInOneIPTVTool:
             return None
 
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu PING đa luồng tới {target_url} (Test 3 lần/IP)...")
+        
+        # ========================================================
+        # KIẾN TRÚC MỚI: PING NHÁP ĐA LUỒNG -> TEST KỸ ĐƠN LUỒNG
+        # ========================================================
+        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. BƯỚC 1: Quét Đa luồng lọc IP chết hẳn...")
+
+        alive_ips = []
+        source_map = unique_proxies 
+        
+        def fast_alive_check(ip):
+            if ip == exclude_ip: return None
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+                opener = urllib.request.build_opener(proxy_handler)
+                req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+                opener.open(req, timeout=8) 
+                return ip
+            except:
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+            futures = {executor.submit(fast_alive_check, ip): ip for ip in unique_proxies.keys()}
+            for future in concurrent.futures.as_completed(futures):
+                res = future.result()
+                if res:
+                    alive_ips.append(res)
+                    
+        if not alive_ips:
+            self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết ngắc ở bước lọc nhanh (0/{len(unique_proxies)} sống).")
+            return None
+            
+        self.log(f"   [Proxy] Qua vòng gửi xe được {len(alive_ips)} IP. BƯỚC 2: Test Đơn luồng đo độ ổn định (3 lượt/IP)...")
 
         working_proxies = []
-        
-        # BƯỚC 1: Ping đa luồng vào web đích (Ping 3 lần để đo độ ổn định)
-        def ping_target_web(ip, source):
-            if ip == exclude_ip: return None
-            
+        for ip in alive_ips:
             success_count = 0
             total_ping = 0
-            test_count = 3
-            timeout_limit = 10
-            
             proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
             opener = urllib.request.build_opener(proxy_handler)
             req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
             
-            for _ in range(test_count):
+            for _ in range(3):
                 try:
                     start_time = time.time()
-                    opener.open(req, timeout=timeout_limit)
+                    opener.open(req, timeout=10)
                     total_ping += (time.time() - start_time)
                     success_count += 1
-                except Exception:
-                    pass 
+                except:
+                    pass
                 time.sleep(0.5) 
-            
+                
             if success_count > 0:
                 avg_ping = total_ping / success_count
-                return (success_count, avg_ping, ip, source)
-            return None
+                working_proxies.append((success_count, avg_ping, ip, source_map[ip]))
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            futures = [executor.submit(ping_target_web, ip, source) for ip, source in unique_proxies.items()]
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if result:
-                    working_proxies.append(result)
-
-        if not working_proxies:
-            self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết khi truy cập {target_name.upper()}.")
-            return None
-
-        # BƯỚC 2: Phân loại Proxy thành 2 Vòng lựa chọn (Tier 1 & Tier 2) và Check IP Việt Nam
+        # Phân loại Tier
         tier1 = [p for p in working_proxies if p[0] == 3]
         tier2 = [p for p in working_proxies if p[0] < 3]
         
         tier1.sort(key=lambda x: x[1]) 
         tier2.sort(key=lambda x: x[1])
         
-        self.log(f"   [Proxy] Lọc được {len(tier1)} IP (Sống 3/3 lần) và {len(tier2)} IP (Sống 1-2 lần). Bắt đầu check IP VN...")
+        self.log(f"   [Proxy] Lọc được {len(tier1)} IP (Nhóm Hoàn hảo) và {len(tier2)} IP (Nhóm Dự phòng). Bắt đầu check IP VN...")
 
         def check_vn_ip(proxy_list, tier_name):
             for success_count, ping_time, ip_port, source in proxy_list:
                 try:
-                    # Bóc tách lấy mỗi địa chỉ IP (bỏ Port) để gọi API Trực tiếp
                     ip_only = ip_port.split(':')[0]
-                    
-                    # GỌI TRỰC TIẾP TỪ MÁY CHỦ, KHÔNG ĐI QUA PROXY ĐỂ CHỐNG TIMEOUT
+                    # Check trực tiếp từ máy chủ Local (Không qua proxy) để chống timeout lỗi Geo
                     url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
                     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                     res = urllib.request.urlopen(req, timeout=5)
@@ -445,8 +455,10 @@ class AllInOneIPTVTool:
                 time.sleep(0.2)
             return None
 
+        # Vòng 1: Tìm trong Nhóm Hoàn hảo
         best_ip = check_vn_ip(tier1, "Hoàn hảo")
         
+        # Vòng 2: Nếu Vòng 1 không có, quét vớt Nhóm Dự phòng
         if not best_ip and tier2:
             self.log(f"   [Proxy] ⚠️ Nhóm Hoàn Hảo không có IP VN. Chuyển sang tìm ở nhóm Dự phòng...")
             best_ip = check_vn_ip(tier2, "Dự phòng")
@@ -606,30 +618,31 @@ class AllInOneIPTVTool:
                 self.log(f"   -> Lượt 1: DOM VTV lấy được {len(vtv_channels)} kênh.")
             except: pass
 
-            self.log("   [VTV] Tiến hành cào Link M3U8 gốc qua VTV1...")
-            f_link, s_msg = self.catch_m3u8_vtvgo(driver, "https://vtvgo.vn/channel/vtv1-1,1.html")
-            
-            if f_link:
-                vtv_master_link = f_link
-                for ch in vtv_channels:
-                    if ch['name'].upper() == "VTV1":
-                        ch['m3u8_link'] = f_link
-                        ch['skip'] = True 
-                        break
-                self.log(f"   ✅ Lượt 1: Đã bắt được Link Gốc VTV thành công.")
-            else:
-                self.log("   ❌ Lượt 1: Không bắt được link VTV1.")
-
-            # Cào Dynamic VTV (Địa phương)
-            vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
-            for idx, ch in enumerate(vtv_dynamic, 1):
-                f_link, s_msg = self.catch_m3u8_vtvgo(driver, ch['url'])
+            if vtv_channels:
+                self.log("   [VTV] Tiến hành cào Link M3U8 gốc qua VTV1...")
+                f_link, s_msg = self.catch_m3u8_vtvgo(driver, "https://vtvgo.vn/channel/vtv1-1,1.html")
+                
                 if f_link:
-                    ch['m3u8_link'] = f_link
-                    self.log(f"   [VTV] {ch['name']} -> ✅ OK")
+                    vtv_master_link = f_link
+                    for ch in vtv_channels:
+                        if ch['name'].upper() == "VTV1":
+                            ch['m3u8_link'] = f_link
+                            ch['skip'] = True 
+                            break
+                    self.log(f"   ✅ Lượt 1: Đã bắt được Link Gốc VTV thành công.")
                 else:
-                    self.log(f"   [VTV] {ch['name']} -> ❌ Lỗi")
-                    vtv_failed_dynamic.append(ch)
+                    self.log("   ❌ Lượt 1: Không bắt được link VTV1.")
+
+                # Cào Dynamic VTV (Địa phương)
+                vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
+                for idx, ch in enumerate(vtv_dynamic, 1):
+                    f_link, s_msg = self.catch_m3u8_vtvgo(driver, ch['url'])
+                    if f_link:
+                        ch['m3u8_link'] = f_link
+                        self.log(f"   [VTV] {ch['name']} -> ✅ OK")
+                    else:
+                        self.log(f"   [VTV] {ch['name']} -> ❌ Lỗi")
+                        vtv_failed_dynamic.append(ch)
 
             driver.quit()
 
@@ -642,7 +655,6 @@ class AllInOneIPTVTool:
                     self.log(f"▶ LƯỢT 2 VTV: Mở trình duyệt (Proxy: {vtv_p2})")
                     driver2 = self._create_driver(vtv_p2)
                     
-                    # Cứu DOM VTV (Nếu Lượt 1 bị timeout ko cào đc danh sách)
                     if not vtv_channels:
                         self.log("   [Cứu VTV] Thử cào lại danh sách kênh (DOM)...")
                         try:
@@ -672,7 +684,21 @@ class AllInOneIPTVTool:
                                 self.log(f"   -> Lượt 2: Cứu DOM VTV được {len(vtv_channels)} kênh.")
                         except: pass
 
-                    if not vtv_master_link:
+                    # CƠ CHẾ FALLBACK DOM TỪ FILE NẾU VTV VẪN SẬP
+                    if not vtv_channels:
+                        self.log("   [VTV] ⚠️ DOM VTV thất bại hoàn toàn. Đang khôi phục danh sách VTV từ file M3U cũ...")
+                        for old_name, old_data in old_links_dict.items():
+                            gn_lower = old_data.get('group', '').lower()
+                            if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
+                                if 'vtvcab' in gn_lower: continue
+                                vtv_channels.append({
+                                    'id': 'fallback', 'name': old_name, 'logo': '',
+                                    'group_name': old_data.get('group', 'Khác'), 'source': 'fallback_only',
+                                    'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
+                                })
+                        self.log(f"   -> Đã khôi phục {len(vtv_channels)} kênh VTV từ file.")
+
+                    if not vtv_master_link and vtv_channels and vtv_channels[0]['source'] != 'fallback_only':
                         self.log("   [Cứu VTV] Thử bắt lại Link Gốc qua VTV1...")
                         f_link, s_msg = self.catch_m3u8_vtvgo(driver2, "https://vtvgo.vn/channel/vtv1-1,1.html")
                         if f_link:
@@ -722,9 +748,8 @@ class AllInOneIPTVTool:
                         
                         // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC NHẤT: 
                         // Kênh VIP luôn chứa một thẻ con có class CSS đặc trưng '.css-1hssde8'
-                        // (Hoặc fallback kiểm tra file ảnh cbac622c276c.png)
                         if (links[j].querySelector('.css-1hssde8')) {
-                            continue; // Bỏ qua kênh thu phí
+                            continue; 
                         }
                         
                         var innerHTML = links[j].innerHTML.toLowerCase();
@@ -814,6 +839,19 @@ class AllInOneIPTVTool:
                                 tv360_channels.append(new_ch)
                                 tv360_failed_dynamic.append(new_ch) 
                             self.log(f"   -> Lượt 2: Cứu DOM TV360 được {len(dom_list2)} kênh.")
+
+                    # CƠ CHẾ FALLBACK DOM TỪ FILE NẾU TV360 VẪN SẬP
+                    if not tv360_dom_scraped:
+                        self.log("   [TV360] ⚠️ DOM TV360 thất bại hoàn toàn. Đang khôi phục danh sách TV360 từ file M3U cũ...")
+                        for old_name, old_data in old_links_dict.items():
+                            gn_lower = old_data.get('group', '').lower()
+                            if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
+                                tv360_channels.append({
+                                    'id': 'fallback', 'name': old_name, 'logo': '',
+                                    'group_name': old_data.get('group', 'Khác'), 'source': 'fallback_only',
+                                    'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
+                                })
+                        self.log(f"   -> Đã khôi phục {len(tv360_channels)} kênh TV360 từ file.")
 
                     for ch in tv360_failed_dynamic:
                         if ch.get('skip'): continue
