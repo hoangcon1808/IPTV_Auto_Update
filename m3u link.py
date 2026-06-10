@@ -422,27 +422,27 @@ class AllInOneIPTVTool:
         self.log(f"   [Proxy] Lọc được {len(tier1)} IP (Sống 3/3 lần) và {len(tier2)} IP (Sống 1-2 lần). Bắt đầu check IP VN...")
 
         def check_vn_ip(proxy_list, tier_name):
-            for success_count, ping_time, ip, source in proxy_list:
+            for success_count, ping_time, ip_port, source in proxy_list:
                 try:
-                    proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
-                    opener = urllib.request.build_opener(proxy_handler)
-                    # Sử dụng ipwho.is, không chặn rate limit, trả kết quả ổn định
-                    check_req = urllib.request.Request("http://ipwho.is/", headers={'User-Agent': 'Mozilla/5.0'})
-                    check_res = opener.open(check_req, timeout=5)
-                    geo_data = json.loads(check_res.read().decode('utf-8'))
+                    # Bóc tách lấy mỗi địa chỉ IP (bỏ Port) để gọi API Trực tiếp
+                    ip_only = ip_port.split(':')[0]
                     
-                    country_code = geo_data.get("country_code", "UNKNOWN")
-                    returned_ip = geo_data.get("ip", "UNKNOWN")
+                    # GỌI TRỰC TIẾP TỪ MÁY CHỦ, KHÔNG ĐI QUA PROXY ĐỂ CHỐNG TIMEOUT
+                    url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    res = urllib.request.urlopen(req, timeout=5)
+                    geo_data = json.loads(res.read().decode('utf-8'))
                     
-                    self.log(f"      [Debug Geo] Test IP {ip} -> Phản hồi IP: {returned_ip} | Mã QG: {country_code}")
+                    country_code = geo_data.get("country", "UNKNOWN")
+                    self.log(f"      [Debug Geo] Tra cứu IP {ip_only} -> Mã QG: {country_code}")
                     
                     if country_code == "VN":
-                        self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN [{tier_name}]: {ip} (Ping: {ping_time:.2f}s, Pass: {success_count}/3) - Nguồn: [{source}]")
-                        return ip
+                        self.log(f"   [Proxy] ✅ {target_name.upper()} CHỌN IP VN [{tier_name}]: {ip_port} (Ping: {ping_time:.2f}s, Pass: {success_count}/3) - Nguồn: [{source}]")
+                        return ip_port
                 except Exception as e:
-                    self.log(f"      [Debug Geo] Test IP {ip} -> Lỗi gọi API Geo: {str(e)[:30]}")
+                    self.log(f"      [Debug Geo] Lỗi tra cứu IP {ip_port}: {str(e)[:30]}")
                     pass
-                time.sleep(0.5)
+                time.sleep(0.2)
             return None
 
         best_ip = check_vn_ip(tier1, "Hoàn hảo")
@@ -634,7 +634,7 @@ class AllInOneIPTVTool:
             driver.quit()
 
             # --- LƯỢT 2 VTV (NẾU CÓ LỖI) ---
-            if (not vtv_master_link or vtv_failed_dynamic) and USE_AUTO_VN_PROXY:
+            if (not vtv_master_link or not vtv_channels or vtv_failed_dynamic) and USE_AUTO_VN_PROXY:
                 self.log("\n⚠️ VTV LƯỢT 1 CÓ LỖI. Khởi động quy trình cứu hộ LƯỢT 2...")
                 vtv_p2 = self._find_best_proxy("vtv", exclude_ip=vtv_p1) 
                 
@@ -642,6 +642,36 @@ class AllInOneIPTVTool:
                     self.log(f"▶ LƯỢT 2 VTV: Mở trình duyệt (Proxy: {vtv_p2})")
                     driver2 = self._create_driver(vtv_p2)
                     
+                    # Cứu DOM VTV (Nếu Lượt 1 bị timeout ko cào đc danh sách)
+                    if not vtv_channels:
+                        self.log("   [Cứu VTV] Thử cào lại danh sách kênh (DOM)...")
+                        try:
+                            driver2.get("https://vtvgo.vn/channel/vtv1-1,1.html")
+                            time.sleep(3) 
+                            page_source = driver2.page_source
+                            match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
+                            if match:
+                                state_json = json.loads(match.group(1))
+                                groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
+                                for group in groups:
+                                    gn_lower = group.get('name', 'Khác').lower()
+                                    if 'vtv' in gn_lower or 'sctv' in gn_lower or 'địa phương' in gn_lower or 'dia phuong' in gn_lower:
+                                        if 'vtvcab' in gn_lower: continue
+                                        src_type = 'vtvgo_dynamic' if ('địa phương' in gn_lower or 'dia phuong' in gn_lower) else 'vtvgo_static'
+                                        for c in group.get('channels', []):
+                                            slug = self.create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
+                                            new_ch = {
+                                                'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
+                                                'group_name': group.get('name', 'Khác'), 'source': src_type,
+                                                'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
+                                                'm3u8_link': None, 'error_msg': None, 'skip': False
+                                            }
+                                            vtv_channels.append(new_ch)
+                                            if src_type == 'vtvgo_dynamic':
+                                                vtv_failed_dynamic.append(new_ch)
+                                self.log(f"   -> Lượt 2: Cứu DOM VTV được {len(vtv_channels)} kênh.")
+                        except: pass
+
                     if not vtv_master_link:
                         self.log("   [Cứu VTV] Thử bắt lại Link Gốc qua VTV1...")
                         f_link, s_msg = self.catch_m3u8_vtvgo(driver2, "https://vtvgo.vn/channel/vtv1-1,1.html")
@@ -654,6 +684,7 @@ class AllInOneIPTVTool:
                                     break
 
                     for ch in vtv_failed_dynamic:
+                        if ch.get('skip'): continue
                         f_link, s_msg = self.catch_m3u8_vtvgo(driver2, ch['url'])
                         if f_link:
                             ch['m3u8_link'] = f_link
@@ -690,9 +721,15 @@ class AllInOneIPTVTool:
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
                         // CƠ CHẾ LỌC VIP TẠI DOM CHÍNH XÁC NHẤT: 
-                        // Dựa vào DOM phân tích, kênh VIP luôn chứa thẻ div con có class css-1hssde8
+                        // Kênh VIP luôn chứa một thẻ con có class CSS đặc trưng '.css-1hssde8'
+                        // (Hoặc fallback kiểm tra file ảnh cbac622c276c.png)
                         if (links[j].querySelector('.css-1hssde8')) {
                             continue; // Bỏ qua kênh thu phí
+                        }
+                        
+                        var innerHTML = links[j].innerHTML.toLowerCase();
+                        if (innerHTML.includes('cbac622c276c.png')) {
+                            continue; // Dự phòng check chuỗi icon VIP
                         }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
