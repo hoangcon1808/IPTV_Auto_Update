@@ -193,9 +193,6 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
-    # ========================================================
-    # ĐÃ SỬA: CÀO PROXY ĐA NGUỒN, TEST 100%, DEBUG CHI TIẾT
-    # ========================================================
     def _get_auto_vn_proxy(self):
         self.log("   [Proxy] Bắt đầu tổng hợp Proxy VN từ đa nguồn (API & Web Cào)...")
         proxy_pool = []
@@ -221,7 +218,7 @@ class AllInOneIPTVTool:
         chrome_options = Options()
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--log-level=3") # Giảm log rác của selenium
+        chrome_options.add_argument("--log-level=3") 
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
@@ -231,12 +228,12 @@ class AllInOneIPTVTool:
             try:
                 driver.get("https://free-proxy-list.net/")
                 time.sleep(2)
-                # Dùng Regex quét toàn bộ table text để chịu lỗi cấu trúc HTML thay đổi
                 table_text = driver.find_element("tag name", "tbody").text
                 count = 0
                 for line in table_text.split('\n'):
                     if " VN " in line or "Vietnam" in line:
-                        match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)', line)
+                        # Regex linh hoạt cho Free Proxy List
+                        match = re.search(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)(?!\d)', line)
                         if match:
                             proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxyList'})
                             count += 1
@@ -244,16 +241,19 @@ class AllInOneIPTVTool:
             except Exception as e:
                 self.log(f"   [Proxy] Nguồn 2 Lỗi: {e}")
 
-            # --- NGUỒN 3: Spys.one (Mã hóa Port bằng JS) ---
+            # --- NGUỒN 3: Spys.one (ĐÃ FIX: Giải mã JS Port) ---
             try:
                 driver.get("https://spys.one/free-proxy-list/VN/")
-                time.sleep(3) # Đợi JS giải mã port
-                body_text = driver.find_element("tag name", "body").text
-                # Quét mọi chuỗi có định dạng IP:Port trên màn hình đã render
-                matches = re.findall(r'\b\d{1,3}(?:\.\d{1,3}){3}:\d+\b', body_text)
+                time.sleep(4) # Chờ thêm chút cho JS của Spys.one giải mã Port xong
+                
+                # Ép trình duyệt trả về text đã render hoàn chỉnh bằng JS
+                body_text = driver.execute_script("return document.body.innerText;")
+                
+                # Quét Regex linh hoạt: Cho phép khoảng trắng giữa IP và Port (vd: 127.0.0.1 : 8080)
+                matches = re.findall(r'(?<!\d)(\d{1,3}(?:\.\d{1,3}){3})\s*:\s*(\d+)(?!\d)', body_text)
                 count = 0
-                for m in matches:
-                    proxy_pool.append({'ip': m, 'source': 'WEB_SpysOne'})
+                for ip, port in matches:
+                    proxy_pool.append({'ip': f"{ip}:{port}", 'source': 'WEB_SpysOne'})
                     count += 1
                 self.log(f"   [Proxy] Nguồn 3 (Spys.one): Thu được {count} IPs.")
             except Exception as e:
@@ -280,7 +280,6 @@ class AllInOneIPTVTool:
         best_ping_time = 999.0
         best_source = None
 
-        # Không giới hạn 15 proxy nữa, quét toàn bộ danh sách tìm con ngon nhất
         tested_count = 0
         working_count = 0
         for ip, source in unique_proxies.items():
@@ -311,7 +310,7 @@ class AllInOneIPTVTool:
                 else:
                     self.log(f"      [Debug] [{source}] {ip} -> LOẠI: Nằm ngoài lãnh thổ VN.")
             except Exception:
-                pass # Bỏ qua các IP chết/timeout để log bớt rác
+                pass 
 
         self.log(f"   [Proxy] Đã test xong {tested_count} IPs. Có {working_count} IPs hoạt động.")
 
