@@ -8,6 +8,7 @@ import json
 import re
 import urllib.request
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -206,12 +207,37 @@ class AllInOneIPTVTool:
         if proxy_ip:
             chrome_options.add_argument(f'--proxy-server=http://{proxy_ip}')
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(30) # Để proxy chết thì tạch sớm
+        driver.set_page_load_timeout(90) # Tăng timeout tải trang lên 90 giây để kiên nhẫn hơn với proxy chậm
         return driver
 
     # ========================================================
     # KIẾN TRÚC MỚI: HÀM CÀO & PING PROXY THEO YÊU CẦU ĐÍCH
     # ========================================================
+    def _validate_single_proxy(self, ip, source, target_url):
+        try:
+            proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+            opener = urllib.request.build_opener(proxy_handler)
+            
+            # Check 1: VN IP
+            check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+            check_res = opener.open(check_req, timeout=5) # Cho phép tối đa 5 giây phản hồi
+            geo_data = json.loads(check_res.read().decode('utf-8'))
+            
+            if geo_data.get("countryCode") == "VN":
+                # Check 2: Đích thực tế (Ping 2 lần liên tục để lấy kết quả trung bình chính xác)
+                pings = []
+                for _ in range(2):
+                    start_time = time.time()
+                    req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    opener.open(req, timeout=8) # Kiên nhẫn hơn với đích thực tế khi kết nối proxy
+                    pings.append(time.time() - start_time)
+                
+                avg_ping = sum(pings) / len(pings)
+                return (avg_ping, ip, source)
+        except Exception:
+            pass
+        return None
+
     def _find_best_proxy(self, target_name="vtv", exclude_ip=None):
         self.log(f"\n   [Proxy] 🔎 ĐANG CÀO DANH SÁCH PROXY MỚI ĐỂ PHỤC VỤ {target_name.upper()}...")
         proxy_pool = []
@@ -263,7 +289,7 @@ class AllInOneIPTVTool:
 
             try:
                 driver.get("https://spys.one/free-proxy-list/VN/")
-                WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
+                WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "font.spy14")))
                 js_extract = """
                     var results = [];
                     var elements = document.querySelectorAll('font.spy14');
@@ -296,39 +322,26 @@ class AllInOneIPTVTool:
 
         # Thiết lập URL đích để PING
         target_url = "https://vtvgo.vn" if target_name == "vtv" else "https://tv360.vn"
-        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu PING tới {target_url}...")
+        self.log(f"   [Proxy] Đã gom {len(unique_proxies)} IPs. Bắt đầu PING đa luồng tới {target_url}...")
 
         working_proxies = []
-        for ip, source in unique_proxies.items():
-            # TUYỆT KỸ: LOẠI TRỪ IP ĐÃ DÙNG VÀ BỊ XỊT Ở LƯỢT 1
-            if ip == exclude_ip: 
-                continue
-            
-            try:
-                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
-                opener = urllib.request.build_opener(proxy_handler)
-                
-                # Check 1: VN IP
-                check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-                check_res = opener.open(check_req, timeout=2) # Ping nhanh
-                geo_data = json.loads(check_res.read().decode('utf-8'))
-                
-                if geo_data.get("countryCode") == "VN":
-                    # Check 2: Đích thực tế
-                    start_time = time.time()
-                    req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
-                    opener.open(req, timeout=4)
-                    ping = time.time() - start_time
-                    
-                    working_proxies.append((ping, ip, source))
-                    # self.log(f"      [Debug] [{source}] {ip} -> PING: {ping:.2f}s") # Ẩn log này đi cho gọn màn hình
-            except Exception:
-                pass 
+        
+        # SỬ DỤNG THREADPOOL ĐỂ KIỂM TRA ĐỒNG THỜI NHANH CHÓNG
+        with ThreadPoolExecutor(max_workers=15) as executor:
+            futures = {
+                executor.submit(self._validate_single_proxy, ip, source, target_url): ip 
+                for ip, source in unique_proxies.items() 
+                if ip != exclude_ip
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    working_proxies.append(result)
 
         if working_proxies:
             working_proxies.sort(key=lambda x: x[0])
             best = working_proxies[0]
-            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Ping: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
+            self.log(f"   [Proxy] ✅ {target_name.upper()} TOP 1 CHỌN: {best[1]} (Ping trung bình: {best[0]:.2f}s) - Nguồn: [{best[2]}]")
             return best[1]
         else:
             self.log(f"   [Proxy] ❌ Mọi Proxy tìm được đều chết khi truy cập {target_name.upper()}.")
@@ -399,7 +412,7 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for i in range(60): 
+            for i in range(90): # Tăng lên 90 giây để kiên nhẫn hơn với proxy chậm
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -411,7 +424,7 @@ class AllInOneIPTVTool:
                                 return req_url, "OK"
                     except: continue
                 time.sleep(1)
-            return None, "Timeout 60s"
+            return None, "Timeout 90s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
@@ -425,7 +438,7 @@ class AllInOneIPTVTool:
             try: driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for i in range(60): 
+            for i in range(90): # Tăng lên 90 giây để kiên nhẫn hơn với proxy chậm
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -436,7 +449,7 @@ class AllInOneIPTVTool:
                                 return req_url, "OK"
                     except: continue
                 time.sleep(1)
-            return None, "Timeout 60s"
+            return None, "Timeout 90s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
@@ -492,9 +505,9 @@ class AllInOneIPTVTool:
                                 })
             except: pass
 
-            # Lấy Token VTV
+            # Lấy Token VTV Lượt 1
             m3u8_url = None
-            for i in range(30): 
+            for i in range(90): # Tăng lên 90 giây
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -528,7 +541,7 @@ class AllInOneIPTVTool:
 
             driver.quit()
 
-            # --- LƯỢT 2 VTV (NẾU CÓ LỖI) ---
+            # --- LƯỢT 2 VTV (NẾU CÓ LỖI HOẶC KHÔNG CÓ TOKEN) ---
             if (not vtv_token or vtv_failed_dynamic) and USE_AUTO_VN_PROXY:
                 self.log("\n⚠️ VTV LƯỢT 1 CÓ LỖI. Khởi động quy trình cứu hộ LƯỢT 2...")
                 vtv_p2 = self._find_best_proxy("vtv", exclude_ip=vtv_p1) # Ép tìm list mới & tránh IP cũ
@@ -541,7 +554,7 @@ class AllInOneIPTVTool:
                         driver2.get("https://vtvgo.vn/channel/vtv1-1,1.html")
                         time.sleep(3)
                         m3u8_url = None
-                        for i in range(30): 
+                        for i in range(90): # Tăng lên 90 giây cho cứu hộ
                             logs = driver2.get_log('performance')
                             for entry in logs:
                                 try:
@@ -571,39 +584,50 @@ class AllInOneIPTVTool:
                     driver2.quit()
 
         # ---------------------------------------------------------
-        # CHU TRÌNH 2: TV360
+        # CHU TRÌNH 2: TV360 (DOM tĩnh - bỏ cuộn trang tải chậm, lọc VIP trực tiếp)
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
         tv360_failed_dynamic = []
         tv360_p1 = self._find_best_proxy("tv360") if USE_AUTO_VN_PROXY else None
         
+        # JS Extractor thông minh: Đọc chuẩn Section Title và Lọc trực tiếp class VIP (.css-1hssde8), bóc logo từ srcset khi chưa load xong
         js_extractor_smart = """
             var results = [];
             var sections = document.querySelectorAll('.container-section');
             for (var i = 0; i < sections.length; i++) {
                 var h2 = sections[i].querySelector('h2');
                 if (!h2) continue;
-                var gnLower = h2.innerText.trim().toLowerCase();
-                var targetGroup = "";
-                if (gnLower.includes("vĩnh long")) targetGroup = "Vĩnh Long";
-                else if (gnLower.includes("htv")) targetGroup = "HTV";
-                else if (gnLower.includes("vtv cab")) targetGroup = "VTVCab";
-                if (!targetGroup) continue;
+                var targetGroup = h2.innerText.trim();
 
                 var links = sections[i].querySelectorAll('a');
                 for (var j = 0; j < links.length; j++) {
                     var href = links[j].href;
                     if (href.includes('/tv/') && href.includes('ch=')) {
+                        // LỌC KÊNH VIP/TRẢ PHÍ NGAY TẠI DOM ĐỂ TRÁNH QUÉT MẤT THỜI GIAN
+                        var isPremium = links[j].querySelector('.css-1hssde8') !== null;
+                        if (isPremium) continue;
+
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
                         var img = links[j].querySelector('img');
+                        var logoUrl = '';
+                        if (img) {
+                            logoUrl = img.src;
+                            // Nếu đang trong trạng thái lazy-load, lấy link từ srcset
+                            if (logoUrl.startsWith('data:image') && img.getAttribute('srcset')) {
+                                var srcset = img.getAttribute('srcset');
+                                var match = srcset.match(/https?:\/\/[^\\s]+/);
+                                if (match) logoUrl = match[0];
+                            }
+                        }
                         try {
                             var urlObj = new URL(href);
                             results.push({
                                 id: urlObj.searchParams.get('ch'),
                                 slug: urlObj.pathname.split('/').pop(),
                                 name: name || urlObj.pathname.split('/').pop(),
-                                logo: img ? img.src : '',
-                                group_name: targetGroup, link: href
+                                logo: logoUrl,
+                                group_name: targetGroup, 
+                                link: href
                             });
                         } catch(e) {}
                     }
@@ -621,12 +645,10 @@ class AllInOneIPTVTool:
             self.log(f"▶ LƯỢT 1 TV360: Mở trình duyệt (Proxy: {tv360_p1})")
             driver = self._create_driver(tv360_p1)
             
-            # Cào DOM TV360
+            # Cào DOM TV360 (Tải DOM tĩnh cực kỳ nhanh chóng)
             try:
                 driver.get("https://tv360.vn/tv")
-                for _ in range(8):
-                    driver.execute_script("window.scrollBy(0, 800);")
-                    time.sleep(1.5)
+                time.sleep(3) # Đợi tải HTML cơ bản
                 
                 dom_list = driver.execute_script(js_extractor_smart)
                 if dom_list:
@@ -637,7 +659,7 @@ class AllInOneIPTVTool:
                             'group_name': c.get('group_name'), 'source': 'tv360_dynamic',
                             'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
                         })
-                    self.log(f"   -> Lượt 1: DOM TV360 lấy được {len(dom_list)} kênh.")
+                    self.log(f"   -> Lượt 1: DOM TV360 lấy được {len(dom_list)} kênh miễn phí.")
             except: pass
 
             # Cào Dynamic TV360
@@ -666,9 +688,7 @@ class AllInOneIPTVTool:
                     
                     if not tv360_dom_scraped:
                         driver2.get("https://tv360.vn/tv")
-                        for _ in range(8):
-                            driver2.execute_script("window.scrollBy(0, 800);")
-                            time.sleep(1.5)
+                        time.sleep(3)
                         dom_list2 = driver2.execute_script(js_extractor_smart)
                         if dom_list2:
                             tv360_dom_scraped = True
