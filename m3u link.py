@@ -193,7 +193,12 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--remote-debugging-port=9222")
-        chrome_options.page_load_strategy = 'eager'
+        
+        # FIX LỖI MẤT TOKEN VTV: 
+        # 1. Loại bỏ page_load_strategy = 'eager' để trình duyệt chờ tải xong Video Player.
+        # 2. Thêm User-Agent của Windows thực để VTVGo không chặn Headless/Bot từ máy chủ Mỹ.
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         driver = webdriver.Chrome(options=chrome_options)
         driver.set_page_load_timeout(30)
@@ -369,6 +374,8 @@ class AllInOneIPTVTool:
 
             self.log("Đang bắt Token chính (VTV/SCTV)...")
             m3u8_url = None
+            
+            # Khôi phục nguyên trạng logic chờ của code gốc
             for i in range(15):
                 logs = main_driver.get_log('performance')
                 for entry in logs:
