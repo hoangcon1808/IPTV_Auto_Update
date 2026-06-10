@@ -20,8 +20,6 @@ if hasattr(sys.stdout, 'reconfigure'):
 # =========================================================
 # CẤU HÌNH TỰ ĐỘNG CÀO PROXY VIỆT NAM
 # =========================================================
-# True: Tool sẽ tự động lên mạng tìm 1 Proxy VN sống để gắn vào Selenium
-# False: Chạy bằng IP gốc của máy (Dùng khi chạy tool ở máy nhà)
 USE_AUTO_VN_PROXY = True 
 # =========================================================
 
@@ -138,9 +136,9 @@ class AllInOneIPTVTool:
             self.log_area.grid(row=3, column=0, columnspan=2, padx=10, pady=5)
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
-            self.log("✅ Chế độ: NGUYÊN BẢN, 1 Luồng, Chờ 30s/Kênh, Cấu hình Windows.")
+            self.log("✅ Chế độ: NGUYÊN BẢN, 1 Luồng, Chờ 60s/Kênh, Cấu hình Windows.")
             if USE_AUTO_VN_PROXY:
-                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT.")
+                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT. Sẽ Test PING nghiêm ngặt.")
             if is_in_startup():
                 self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
 
@@ -198,26 +196,46 @@ class AllInOneIPTVTool:
                 self.startup_var.set(True)
 
     # ========================================================
-    # HÀM MỚI: TỰ ĐỘNG CÀO PROXY VIỆT NAM
+    # HÀM MỚI: TỰ ĐỘNG CÀO & KIỂM TRA ĐỘ SỐNG PROXY VIỆT NAM
     # ========================================================
     def _get_auto_vn_proxy(self):
-        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam miễn phí...")
+        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam...")
         try:
-            # Dùng API lấy list proxy chuẩn dạng text thay vì cào HTML rườm rà
             url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             response = urllib.request.urlopen(req, timeout=15)
             data = response.read().decode('utf-8').strip()
             
             if data:
-                proxies = data.split('\r\n')
-                if proxies and proxies[0]:
-                    proxy = proxies[0].strip()
-                    self.log(f"   [Proxy] ✅ Đã cào được Proxy VN thành công: {proxy}")
-                    return proxy
-            self.log("   [Proxy] ⚠️ Không tìm thấy Proxy VN nào hoạt động lúc này.")
+                proxies = [p.strip() for p in data.split('\r\n') if p.strip()]
+                self.log(f"   [Proxy] Cào được {len(proxies)} IP. Bắt đầu Test kết nối...")
+                
+                # Chạy vòng lặp test tối đa 10 Proxy đầu tiên để tìm con nào sống
+                for proxy in proxies[:10]:
+                    self.log(f"   [Proxy] Thử Ping IP: {proxy}...")
+                    try:
+                        # Cấu hình urllib để dùng Proxy này
+                        proxy_handler = urllib.request.ProxyHandler({'http': proxy, 'https': proxy})
+                        opener = urllib.request.build_opener(proxy_handler)
+                        
+                        # Ping vào ip-api để check xem proxy có tải được trang và có phải VN không
+                        check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+                        check_res = opener.open(check_req, timeout=5) # Đợi max 5s, nếu tịt thì bỏ qua luôn
+                        
+                        geo_data = json.loads(check_res.read().decode('utf-8'))
+                        if geo_data.get("countryCode") == "VN":
+                            self.log(f"   [Proxy] ✅ TUYỆT VỜI! Proxy {proxy} SỐNG và có IP tại: {geo_data.get('city', 'VN')}")
+                            return proxy
+                        else:
+                            self.log(f"   [Proxy] ⚠️ Proxy sống nhưng bị sai Location ({geo_data.get('countryCode')}). Bỏ qua.")
+                    except Exception:
+                        self.log(f"   [Proxy] ❌ Proxy CHẾT hoặc Timeout. Đang thử IP tiếp theo...")
+                
+                self.log("   [Proxy] ⚠️ Toàn bộ danh sách Proxy lấy được đều chết.")
+            else:
+                self.log("   [Proxy] ⚠️ API không trả về Proxy nào lúc này.")
         except Exception as e:
-            self.log(f"   [Proxy] ❌ Lỗi khi tự động cào Proxy: {e}")
+            self.log(f"   [Proxy] ❌ Lỗi System khi cào Proxy: {e}")
         return None
     # ========================================================
 
@@ -275,6 +293,9 @@ class AllInOneIPTVTool:
             driver.get(url)
             time.sleep(2) 
             
+            # Log xem trang đã tải được gì chưa hay bị Proxy chặn trang trắng
+            self.log(f"      [Debug] Proxy phản hồi Title trang là: '{driver.title}'")
+
             try:
                 driver.execute_script("""
                     var btns = document.getElementsByTagName('button');
@@ -286,7 +307,8 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for i in range(30): 
+            # Đổi từ 30 -> 60 để phù hợp tốc độ Proxy
+            for i in range(60): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -300,7 +322,7 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 30s"
+            return None, "Timeout 60s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
@@ -310,6 +332,9 @@ class AllInOneIPTVTool:
             driver.get_log('performance') 
             driver.get(url)
             time.sleep(3) 
+
+            # Log xem trang đã tải được gì chưa
+            self.log(f"      [Debug] Proxy phản hồi Title trang là: '{driver.title}'")
             
             is_premium = driver.execute_script("return document.body.innerText.includes('Nội dung có phí') || document.body.innerText.includes('Vui lòng đăng ký gói');")
             if is_premium:
@@ -319,7 +344,8 @@ class AllInOneIPTVTool:
                 driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for i in range(30): 
+            # Đổi từ 30 -> 60 để phù hợp tốc độ Proxy
+            for i in range(60): 
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -333,7 +359,7 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 30s"
+            return None, "Timeout 60s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
@@ -361,10 +387,10 @@ class AllInOneIPTVTool:
             
             if auto_proxy_ip:
                 chrome_options.add_argument(f'--proxy-server=http://{auto_proxy_ip}')
-                self.log(f"⚠️ Mạng ngầm đã được cấu hình Fake IP về Việt Nam.")
+                self.log(f"⚠️ Trình duyệt ngầm đã được cấu hình Fake IP: {auto_proxy_ip}")
 
             driver = webdriver.Chrome(options=chrome_options)
-            driver.set_page_load_timeout(45) # Ép thoát nếu proxy chết quá 45s
+            driver.set_page_load_timeout(90) # Tăng lên 90s do proxy free thường chạy chậm
 
             # ==========================================
             # BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO
@@ -372,6 +398,7 @@ class AllInOneIPTVTool:
             self.log("Đang truy cập VTVGo lấy Dữ liệu Kênh...")
             driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
             time.sleep(3) 
+            self.log(f"   [Debug] Title VTVGo nhận được: '{driver.title}'")
             
             try:
                 driver.execute_script("""
@@ -422,7 +449,7 @@ class AllInOneIPTVTool:
 
             self.log("Đang bắt Token chính (VTV/SCTV)...")
             m3u8_url = None
-            for i in range(15):
+            for i in range(30): # Tăng time chờ Token chính lên 30
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -450,6 +477,7 @@ class AllInOneIPTVTool:
             # ==========================================
             self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
             driver.get("https://tv360.vn/tv")
+            self.log(f"   [Debug] Title TV360 nhận được: '{driver.title}'")
             
             for _ in range(8):
                 driver.execute_script("window.scrollBy(0, 800);")
@@ -533,7 +561,7 @@ class AllInOneIPTVTool:
             # ==========================================
             dynamic_channels = [ch for ch in master_channels_list if ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic')]
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu quét m3u8 mạng ngầm 1 LUỒNG (Tối đa 30s/kênh) cho {len(dynamic_channels)} Kênh...")
+                self.log(f"⏳ Bắt đầu quét m3u8 mạng ngầm 1 LUỒNG (Tối đa 60s/kênh) cho {len(dynamic_channels)} Kênh...")
                 for idx, ch in enumerate(dynamic_channels, 1):
                     
                     if ch['source'] == 'vtvgo_dynamic':
