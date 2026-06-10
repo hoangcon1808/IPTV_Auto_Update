@@ -121,7 +121,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Đã thiết lập: Phân nhóm chuẩn và Đẩy kênh An Ninh, Quốc Phòng lên VTV.")
-            self.log("✅ Đã thiết lập: Đa luồng (Max 6 Threads), Thời gian đợi 25s, Fallback Link cũ.")
+            self.log("✅ Đã thiết lập: Đa luồng (Max 10 Threads), Thời gian đợi 300s (5 phút), Fallback CHUẨN.")
 
     def get_file_path(self):
         if self.headless:
@@ -132,7 +132,7 @@ class AllInOneIPTVTool:
         now = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{now}] {message}"
         print(formatted_message)
-        sys.stdout.flush() # Ép Python nhả Log ra màn hình GitHub ngay lập tức
+        sys.stdout.flush()
         
         if not self.headless and hasattr(self, 'log_area'):
             self.log_area.config(state='normal')
@@ -189,13 +189,16 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(45) # Chống treo hoàn toàn khi load web quá chậm
+        driver.set_page_load_timeout(300) # Đợi 5 phút cho page load
         return driver
 
+    # --- HÀM LẤY FALLBACK CHUẨN (CẢ LINK LẪN TOKEN) ---
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
-        if not os.path.exists(filepath): return old_links
+        old_token = None
+        old_ts = None
+        if not os.path.exists(filepath): return old_links, old_token, old_ts
         try:
             with open(filepath, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
@@ -205,11 +208,18 @@ class AllInOneIPTVTool:
                 if line.startswith("#EXTINF"):
                     parts = line.split(',')
                     if len(parts) > 1: current_name = parts[-1].strip()
-                elif line and not line.startswith("#") and current_name:
-                    old_links[current_name] = line
-                    current_name = None
+                # CẢI TIẾN: Chỉ lấy các dòng thực sự là link (bắt đầu bằng http) để chống lỗi
+                elif line.startswith("http"): 
+                    if current_name:
+                        old_links[current_name] = line
+                        current_name = None
+                    # Tìm Token VTV cũ nếu có
+                    if "vtvgolive-ssaimh.vtvdigital.vn" in line and old_token is None:
+                        match = re.search(r'vtvdigital\.vn/([^/]+)/([^/]+)/manifest', line)
+                        if match:
+                            old_token, old_ts = match.group(1), match.group(2)
         except Exception: pass
-        return old_links
+        return old_links, old_token, old_ts
 
     def remove_accents(self, input_str):
         s1 = u'ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ'
@@ -251,7 +261,7 @@ class AllInOneIPTVTool:
                 """)
             except: pass
 
-            for _ in range(25): # Tăng lên 25s cho Server Mỹ
+            for _ in range(300): # TEST: Chờ 300s
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -263,7 +273,7 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 25s"
+            return None, "Timeout 300s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
@@ -281,7 +291,7 @@ class AllInOneIPTVTool:
                 driver.execute_script("var v=document.querySelector('video'); if(v) v.play();")
             except: pass
 
-            for _ in range(25): # Tăng lên 25s cho Server Mỹ
+            for _ in range(300): # TEST: Chờ 300s
                 logs = driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -293,13 +303,13 @@ class AllInOneIPTVTool:
                     except: continue
                 time.sleep(1)
 
-            return None, "Timeout 25s"
+            return None, "Timeout 300s"
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
     def extract_all_data(self):
         self.save_settings() 
-        old_links_dict = self.load_old_m3u_links()
+        old_links_dict, fallback_token, fallback_ts = self.load_old_m3u_links()
         master_channels_list = []
         vtv_token = None
         vtv_ts = None
@@ -354,10 +364,10 @@ class AllInOneIPTVTool:
                 except Exception as e:
                     self.log(f"Lỗi khi bóc tách JSON VTVGo: {e}")
 
-            self.log("Đang bắt Token chính (VTV/SCTV)... Chờ tối đa 25s...")
+            self.log("Đang bắt Token chính (VTV/SCTV)... Chờ tối đa 300s...")
             m3u8_url = None
             
-            for i in range(25): # Tăng lên 25s để chống tịt Token
+            for i in range(300): # TEST: Chờ 300s
                 logs = main_driver.get_log('performance')
                 for entry in logs:
                     try:
@@ -376,11 +386,16 @@ class AllInOneIPTVTool:
                 vtv_token, vtv_ts = parts[3], parts[4]
                 self.log(f"✅ Bắt Token VTVGo thành công: {vtv_token[:8]}...")
             else:
-                self.log("❌ Không bắt được Token VTVGo. Các kênh VTV tĩnh sẽ không có link.")
+                # SỬ DỤNG FALLBACK TOKEN NẾU THẤT BẠI
+                if fallback_token and fallback_ts:
+                    vtv_token, vtv_ts = fallback_token, fallback_ts
+                    self.log(f"⚠️ Dùng Token VTVGo CŨ (Fallback): {vtv_token[:8]}...")
+                else:
+                    self.log("❌ Không bắt được Token VTVGo và không có fallback.")
 
             self.log("Đang truy cập TV360 lấy Dữ liệu DOM...")
             main_driver.get("https://tv360.vn/tv")
-            for _ in range(8):
+            for _ in range(15): # CẢI TIẾN: Cuộn 15 lần để quét đủ các kênh TV360
                 main_driver.execute_script("window.scrollBy(0, 800);")
                 time.sleep(1.5)
                 
@@ -438,7 +453,7 @@ class AllInOneIPTVTool:
             dynamic_channels = [ch for ch in master_channels_list if ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic')]
             
             if dynamic_channels:
-                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 6 Threads) cho {len(dynamic_channels)} Kênh...")
+                self.log(f"⏳ Bắt đầu quét mạng ngầm ĐA LUỒNG (Max 10 Threads) cho {len(dynamic_channels)} Kênh...")
                 
                 def process_channel_worker(ch):
                     worker_driver = self._create_driver()
@@ -472,8 +487,8 @@ class AllInOneIPTVTool:
                     finally:
                         worker_driver.quit()
 
-                # Tối ưu nhả Log thời gian thực bằng as_completed
-                with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+                # Tối ưu RAM và CPU công khai: Mở 10 Threads
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
                     futures = [executor.submit(process_channel_worker, ch) for ch in dynamic_channels]
                     for future in concurrent.futures.as_completed(futures):
                         pass
