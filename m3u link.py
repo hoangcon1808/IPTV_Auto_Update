@@ -317,7 +317,7 @@ class AllInOneIPTVTool:
                     req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
                     response = opener.open(req, timeout=5) 
                     
-                    chunk = response.read(51200) # Đã nâng lên 50KB
+                    chunk = response.read(102400) # Đã nâng lên 50KB
                     
                     if len(chunk) > 100: 
                         load_time = time.time() - start_time
