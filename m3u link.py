@@ -193,54 +193,134 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
+    # ========================================================
+    # ĐÃ SỬA: CÀO PROXY ĐA NGUỒN, TEST 100%, DEBUG CHI TIẾT
+    # ========================================================
     def _get_auto_vn_proxy(self):
-        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam miễn phí...")
+        self.log("   [Proxy] Bắt đầu tổng hợp Proxy VN từ đa nguồn (API & Web Cào)...")
+        proxy_pool = []
+
+        # --- NGUỒN 1: API (Nhanh nhất) ---
         try:
             url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            response = urllib.request.urlopen(req, timeout=15)
+            response = urllib.request.urlopen(req, timeout=10)
             data = response.read().decode('utf-8').strip()
-            
             if data:
-                proxies = [p.strip() for p in data.split('\r\n') if p.strip()]
-                self.log(f"   [Proxy] Cào được {len(proxies)} IP. Tiến hành Sàng lọc & Đo tốc độ đến VTVGo...")
-                
-                best_proxy = None
-                best_ping_time = 999.0
-                
-                for proxy in proxies[:15]:
-                    try:
-                        proxy_handler = urllib.request.ProxyHandler({'http': proxy, 'https': proxy})
-                        opener = urllib.request.build_opener(proxy_handler)
-                        
-                        check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
-                        check_res = opener.open(check_req, timeout=3)
-                        geo_data = json.loads(check_res.read().decode('utf-8'))
-                        
-                        if geo_data.get("countryCode") == "VN":
-                            start_time = time.time()
-                            vtv_req = urllib.request.Request("https://vtvgo.vn", headers={'User-Agent': 'Mozilla/5.0'})
-                            opener.open(vtv_req, timeout=5)
-                            response_time = time.time() - start_time
-                            
-                            self.log(f"   [Proxy] {proxy} (VN) | Phản hồi VTVGo: {response_time:.2f}s")
-                            
-                            if response_time < best_ping_time:
-                                best_ping_time = response_time
-                                best_proxy = proxy
-                    except Exception:
-                        pass
-
-                if best_proxy:
-                    self.log(f"   [Proxy] ✅ ĐÃ CHỌN ĐƯỢC PROXY TỐI ƯU NHẤT: {best_proxy} (Độ trễ: {best_ping_time:.2f}s)")
-                    return best_proxy
-                else:
-                    self.log("   [Proxy] ⚠️ Các IP tìm được đều Timeout hoặc sai Location.")
-            else:
-                self.log("   [Proxy] ⚠️ API không trả về Proxy nào lúc này.")
+                count = 0
+                for p in data.split('\r\n'):
+                    if p.strip():
+                        proxy_pool.append({'ip': p.strip(), 'source': 'API_ProxyScrape'})
+                        count += 1
+                self.log(f"   [Proxy] Nguồn 1 (API ProxyScrape): Thu được {count} IPs.")
         except Exception as e:
-            self.log(f"   [Proxy] ❌ Lỗi System khi cào Proxy: {e}")
-        return None
+            self.log(f"   [Proxy] Nguồn 1 Lỗi: {e}")
+
+        # --- NGUỒN WEB (DÙNG SELENIUM LÀM FALLBACK/BỔ SUNG) ---
+        self.log("   [Proxy] Khởi động Selenium ngầm để quét thêm Proxy từ các Website chống Bot...")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--log-level=3") # Giảm log rác của selenium
+        driver = None
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.set_page_load_timeout(30)
+
+            # --- NGUỒN 2: Free-Proxy-List.net ---
+            try:
+                driver.get("https://free-proxy-list.net/")
+                time.sleep(2)
+                # Dùng Regex quét toàn bộ table text để chịu lỗi cấu trúc HTML thay đổi
+                table_text = driver.find_element("tag name", "tbody").text
+                count = 0
+                for line in table_text.split('\n'):
+                    if " VN " in line or "Vietnam" in line:
+                        match = re.search(r'(\d{1,3}(?:\.\d{1,3}){3})\s+(\d+)', line)
+                        if match:
+                            proxy_pool.append({'ip': f"{match.group(1)}:{match.group(2)}", 'source': 'WEB_FreeProxyList'})
+                            count += 1
+                self.log(f"   [Proxy] Nguồn 2 (Free-Proxy-List): Thu được {count} IPs.")
+            except Exception as e:
+                self.log(f"   [Proxy] Nguồn 2 Lỗi: {e}")
+
+            # --- NGUỒN 3: Spys.one (Mã hóa Port bằng JS) ---
+            try:
+                driver.get("https://spys.one/free-proxy-list/VN/")
+                time.sleep(3) # Đợi JS giải mã port
+                body_text = driver.find_element("tag name", "body").text
+                # Quét mọi chuỗi có định dạng IP:Port trên màn hình đã render
+                matches = re.findall(r'\b\d{1,3}(?:\.\d{1,3}){3}:\d+\b', body_text)
+                count = 0
+                for m in matches:
+                    proxy_pool.append({'ip': m, 'source': 'WEB_SpysOne'})
+                    count += 1
+                self.log(f"   [Proxy] Nguồn 3 (Spys.one): Thu được {count} IPs.")
+            except Exception as e:
+                self.log(f"   [Proxy] Nguồn 3 Lỗi: {e}")
+
+        except Exception as e:
+            self.log(f"   [Proxy] Lỗi khởi tạo Selenium quét Web: {e}")
+        finally:
+            if driver: driver.quit()
+
+        # Loại bỏ IP trùng lặp nhưng ưu tiên giữ tag Source đầu tiên tìm thấy
+        unique_proxies = {}
+        for p in proxy_pool:
+            if p['ip'] not in unique_proxies:
+                unique_proxies[p['ip']] = p['source']
+
+        if not unique_proxies:
+            self.log("   [Proxy] ❌ Cào thất bại từ tất cả các nguồn (Không có Proxy nào).")
+            return None
+
+        self.log(f"   [Proxy] Đã lọc được {len(unique_proxies)} IP VN unique. Bắt đầu test PING tới VTVGo...")
+
+        best_proxy = None
+        best_ping_time = 999.0
+        best_source = None
+
+        # Không giới hạn 15 proxy nữa, quét toàn bộ danh sách tìm con ngon nhất
+        tested_count = 0
+        working_count = 0
+        for ip, source in unique_proxies.items():
+            tested_count += 1
+            try:
+                proxy_handler = urllib.request.ProxyHandler({'http': ip, 'https': ip})
+                opener = urllib.request.build_opener(proxy_handler)
+                
+                # Check 1: Phải là IP VN (timeout nhanh)
+                check_req = urllib.request.Request("http://ip-api.com/json/", headers={'User-Agent': 'Mozilla/5.0'})
+                check_res = opener.open(check_req, timeout=3)
+                geo_data = json.loads(check_res.read().decode('utf-8'))
+                
+                if geo_data.get("countryCode") == "VN":
+                    # Check 2: Speedtest thực tế tới VTVGo
+                    start_time = time.time()
+                    vtv_req = urllib.request.Request("https://vtvgo.vn", headers={'User-Agent': 'Mozilla/5.0'})
+                    opener.open(vtv_req, timeout=5)
+                    response_time = time.time() - start_time
+                    
+                    working_count += 1
+                    self.log(f"      [Debug] [{source}] {ip} -> PING: {response_time:.2f}s")
+                    
+                    if response_time < best_ping_time:
+                        best_ping_time = response_time
+                        best_proxy = ip
+                        best_source = source
+                else:
+                    self.log(f"      [Debug] [{source}] {ip} -> LOẠI: Nằm ngoài lãnh thổ VN.")
+            except Exception:
+                pass # Bỏ qua các IP chết/timeout để log bớt rác
+
+        self.log(f"   [Proxy] Đã test xong {tested_count} IPs. Có {working_count} IPs hoạt động.")
+
+        if best_proxy:
+            self.log(f"   [Proxy] ✅ CHỌN KẾT QUẢ TỐT NHẤT: {best_proxy} (Độ trễ: {best_ping_time:.2f}s) từ nguồn [{best_source}]")
+            return best_proxy
+        else:
+            self.log("   [Proxy] ⚠️ Toàn bộ danh sách cào được đều Timeout hoặc sai Location.")
+            return None
 
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
@@ -386,7 +466,7 @@ class AllInOneIPTVTool:
                 # LOGIC BẢO VỆ 1: DỪNG NẾU KHÔNG CÓ PROXY
                 # ==========================================
                 if not auto_proxy_ip:
-                    self.log("❌ CRITICAL: Không tìm thấy Proxy VN. Hủy bỏ tiến trình để bảo vệ file M3U cũ khỏi bị ghi đè!")
+                    self.log("❌ CRITICAL: Không tìm thấy Proxy VN hợp lệ nào. Hủy bỏ tiến trình để bảo vệ file M3U cũ khỏi bị ghi đè!")
                     return None, None, None
 
             self.log("Đang khởi động trình duyệt nguyên bản...")
