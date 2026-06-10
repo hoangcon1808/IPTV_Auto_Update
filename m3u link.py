@@ -270,8 +270,8 @@ class AllInOneIPTVTool:
             except: pass
             return None
 
-        # GeoJS xử lý đa luồng rất mượt, ta dùng 200 luồng để check cho lẹ
-        with concurrent.futures.ThreadPoolExecutor(max_workers=200) as executor:
+        # GeoJS xử lý đa luồng rất mượt, ta dùng 500 luồng để check cho lẹ
+        with concurrent.futures.ThreadPoolExecutor(max_workers=500) as executor:
             futures = [executor.submit(check_geo, ip, protocol) for ip, protocol in unique_proxies.items()]
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
