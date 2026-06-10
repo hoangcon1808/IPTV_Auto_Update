@@ -8,6 +8,7 @@ import sys
 import os
 import json
 import re
+import urllib.request
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -15,6 +16,14 @@ from selenium.webdriver.chrome.options import Options
 # --- FIX LỖI UNICODE TRÊN WINDOWS TERMINAL TẠI GITHUB ACTIONS ---
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
+
+# =========================================================
+# CẤU HÌNH TỰ ĐỘNG CÀO PROXY VIỆT NAM
+# =========================================================
+# True: Tool sẽ tự động lên mạng tìm 1 Proxy VN sống để gắn vào Selenium
+# False: Chạy bằng IP gốc của máy (Dùng khi chạy tool ở máy nhà)
+USE_AUTO_VN_PROXY = True 
+# =========================================================
 
 # --- IMPORT CHO CHỨC NĂNG KHỞI ĐỘNG CÙNG WINDOWS ---
 WIN32API_AVAILABLE = False
@@ -89,7 +98,6 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        # FIX CỨNG ĐƯỜNG DẪN KHI CHẠY HEADLESS ĐỂ TRÁNH LỖI [Errno 2]
         if self.headless:
             self.current_path = "vn.m3u"
         else:
@@ -131,6 +139,8 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: NGUYÊN BẢN, 1 Luồng, Chờ 30s/Kênh, Cấu hình Windows.")
+            if USE_AUTO_VN_PROXY:
+                self.log("✅ Chế độ Auto-Scrape Proxy VN đang BẬT.")
             if is_in_startup():
                 self.log("✅ Tool đang được đặt để khởi chạy ngầm cùng Windows.")
 
@@ -187,7 +197,30 @@ class AllInOneIPTVTool:
             else:
                 self.startup_var.set(True)
 
-    # --- HÀM LẤY LINK M3U8 TỪ FILE CŨ (FALLBACK) ---
+    # ========================================================
+    # HÀM MỚI: TỰ ĐỘNG CÀO PROXY VIỆT NAM
+    # ========================================================
+    def _get_auto_vn_proxy(self):
+        self.log("   [Proxy] Đang tiến hành cào danh sách Proxy Việt Nam miễn phí...")
+        try:
+            # Dùng API lấy list proxy chuẩn dạng text thay vì cào HTML rườm rà
+            url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=VN&ssl=all&anonymity=all"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = urllib.request.urlopen(req, timeout=15)
+            data = response.read().decode('utf-8').strip()
+            
+            if data:
+                proxies = data.split('\r\n')
+                if proxies and proxies[0]:
+                    proxy = proxies[0].strip()
+                    self.log(f"   [Proxy] ✅ Đã cào được Proxy VN thành công: {proxy}")
+                    return proxy
+            self.log("   [Proxy] ⚠️ Không tìm thấy Proxy VN nào hoạt động lúc này.")
+        except Exception as e:
+            self.log(f"   [Proxy] ❌ Lỗi khi tự động cào Proxy: {e}")
+        return None
+    # ========================================================
+
     def load_old_m3u_links(self):
         filepath = self.get_file_path()
         old_links = {}
@@ -211,7 +244,6 @@ class AllInOneIPTVTool:
             self.log(f"   [Debug] Lỗi đọc file cũ: {e}")
         return old_links
 
-    # --- CÁC HÀM XỬ LÝ CHUỖI ---
     def remove_accents(self, input_str):
         s1 = u'ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ'
         s0 = u'AAAAEEEIIOOOOUUYaaaaeeeiioooouuyAaDdIiUuOoUuAaAaAaAaAaAaAaAaAaAaAaAaEeEeEeEeEeEeEeEeIiIiOoOoOoOoOoOoOoOoOoOoOoOoUuUuUuUuUuUuUuYyYyYyYy'
@@ -236,7 +268,6 @@ class AllInOneIPTVTool:
         text = re.sub(r'\s+', '-', text).strip('-')
         return text
 
-    # --- HÀM BẮT M3U8 VTVGO (ĐỢI TỐI ĐA 30S) ---
     def catch_m3u8_vtvgo(self, driver, url):
         try:
             self.log(f"      [Debug] Đang bắt đầu truy cập URL: {url}")
@@ -273,7 +304,6 @@ class AllInOneIPTVTool:
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # --- HÀM BẮT M3U8 TV360 (CHECK PHÍ + ĐỢI TỐI ĐA 30S) ---
     def catch_m3u8_tv360(self, driver, url):
         try:
             self.log(f"      [Debug] Đang bắt đầu truy cập URL: {url}")
@@ -307,10 +337,8 @@ class AllInOneIPTVTool:
         except Exception as e:
             return None, f"Lỗi System: {str(e)[:30]}"
 
-    # --- QUY TRÌNH QUÉT CHÍNH ---
     def extract_all_data(self):
         self.save_settings() 
-        self.log("Đang khởi động trình duyệt nguyên bản...")
         old_links_dict = self.load_old_m3u_links()
         master_channels_list = []
         vtv_token = None
@@ -318,14 +346,25 @@ class AllInOneIPTVTool:
         
         driver = None
         try:
+            # --- TÍCH HỢP AUTO PROXY ---
+            auto_proxy_ip = None
+            if USE_AUTO_VN_PROXY:
+                auto_proxy_ip = self._get_auto_vn_proxy()
+
+            self.log("Đang khởi động trình duyệt nguyên bản...")
             chrome_options = Options()
             chrome_options.add_argument("--headless=new") 
             chrome_options.add_argument("--mute-audio")
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
             chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+            
+            if auto_proxy_ip:
+                chrome_options.add_argument(f'--proxy-server=http://{auto_proxy_ip}')
+                self.log(f"⚠️ Mạng ngầm đã được cấu hình Fake IP về Việt Nam.")
 
             driver = webdriver.Chrome(options=chrome_options)
+            driver.set_page_load_timeout(45) # Ép thoát nếu proxy chết quá 45s
 
             # ==========================================
             # BƯỚC 1: LẤY DATA VÀ TOKEN TỪ VTVGO
@@ -533,7 +572,6 @@ class AllInOneIPTVTool:
             if driver: driver.quit()
             return None, None, None
 
-    # --- TẠO FILE M3U TỪ DANH SÁCH TỔNG ---
     def generate_m3u(self, vtv_token, vtv_ts, master_channels_list):
         for ch in master_channels_list:
             ch_name_lower = ch['name'].lower()
@@ -595,7 +633,6 @@ class AllInOneIPTVTool:
         except Exception as e:
             self.log(f"❌ LỖI Ghi file: {e}")
 
-    # Chạy quy trình khi dùng giao diện
     def run_update_process(self):
         if not self.headless:
             self.btn_manual.config(state="disabled")
@@ -610,7 +647,6 @@ class AllInOneIPTVTool:
     def manual_update(self):
         threading.Thread(target=self.run_update_process, daemon=True).start()
 
-    # Chạy quy trình ngầm (dành cho startup windows)
     def run_update_process_headless(self):
         self.log("=== BẮT ĐẦU CHẠY NGẦM GITHUB (WIN MODE) ===")
         tk_val, ts_val, channels_data = self.extract_all_data()
