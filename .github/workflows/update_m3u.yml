@@ -35,7 +35,24 @@ jobs:
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
         # Sửa ở đây: Thêm iptv_tool_config.json để GitHub nhớ IP ngon cho lần sau
-        git add vn.m3u iptv_tool_config.json
+        git add vn.m3u
+        
+        # Nếu có thay đổi thì commit, nếu không thì bỏ qua
+        git diff --quiet && git diff --staged --quiet || git commit -m "Auto Update: Làm mới Token IPTV & Proxy"
+        
+        # Lấy data mới nhất từ nhánh chính, NẾU XUNG ĐỘT (CONFLICT) -> GIỮ LẠI FILE LOCAL (-X ours)
+        git pull origin main --rebase -X ours
+        
+        git push origin main
+
+    - name: Lưu đè file json lên GitHub
+      shell: bash
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Sửa ở đây: Thêm iptv_tool_config.json để GitHub nhớ IP ngon cho lần sau
+        git add vn.m3u
         
         # Nếu có thay đổi thì commit, nếu không thì bỏ qua
         git diff --quiet && git diff --staged --quiet || git commit -m "Auto Update: Làm mới Token IPTV & Proxy"
