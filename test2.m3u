@@ -1,3 +1,5 @@
-#EXTM3U
-#EXTINF:-1 tvg-id="VTV1" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/logo/VTV1_150x902_1675159127.webp" group-title="Kênh VTV", VTV1
-https://liveatmvng.vtvprime.vn/live/data8/SCTV3/Live_HLSDRM/SCTV3-mp4a_96000_vie=20000.m3u8
+#EXTINF:-1 tvg-id="SCTV3" tvg-logo="logo_sctv3.png" group-title="Kênh SCTV", SCTV3
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=widevine
+#KODIPROP:inputstream.adaptive.license_key=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv032026
+https://liveatmvng.vtvprime.vn/live/data8/SCTV3/Live_DASHDRM/SCTV3.mpd
