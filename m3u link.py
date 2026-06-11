@@ -11,6 +11,7 @@ import time
 import json
 import re
 import urllib.request
+import requests
 import concurrent.futures
 from datetime import datetime
 from selenium import webdriver
@@ -146,7 +147,7 @@ class AllInOneIPTVTool:
             self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s) cho kênh cũ.")
             self.log("✅ Chế độ: Nhớ Proxy tốt nhất (Smart Caching Proxy) đang bật.")
             if USE_AUTO_VN_PROXY:
-                self.log("✅ Chế độ Auto-Scrape Proxy HTTP từ TheSpeedX đang BẬT.")
+                self.log("✅ Chế độ Auto-Scrape Proxy Đa Giao Thức từ ProxyScrape đang BẬT.")
 
     def get_file_path(self):
         if self.headless:
@@ -227,14 +228,21 @@ class AllInOneIPTVTool:
     # ========================================================
     # GIAI ĐOẠN 0: TEST PROXY CŨ TỪ CONFIG (TIẾT KIỆM THỜI GIAN)
     # ========================================================
-    def _test_proxy_ping(self, ip_port, target_url):
+    def _test_proxy_ping(self, ip_port, target_url, protocol="http"):
         try:
-            proxy_handler = urllib.request.ProxyHandler({'http': ip_port, 'https': ip_port})
-            opener = urllib.request.build_opener(proxy_handler)
-            req = urllib.request.Request(target_url, headers={'User-Agent': 'Mozilla/5.0'})
+            proxies = {
+                "http": f"{protocol}://{ip_port}",
+                "https": f"{protocol}://{ip_port}"
+            }
             start_time = time.time()
-            opener.open(req, timeout=5) # Giảm timeout xuống 5s
-            return time.time() - start_time
+            # Tăng timeout lên 15s theo yêu cầu
+            req = requests.get(target_url, proxies=proxies, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+            if req.status_code == 200:
+                return time.time() - start_time
+            return None
+        except requests.exceptions.InvalidSchema:
+            # Bắt lỗi nếu môi trường thiếu PySocks cho giao thức SOCKS
+            return None
         except Exception:
             return None
 
@@ -242,52 +250,54 @@ class AllInOneIPTVTool:
         self.log("\n[GIAI ĐOẠN 0] 🔎 KIỂM TRA PROXY CŨ ĐÃ LƯU TRONG CONFIG...")
         alive_proxies = {"vtv": None, "tv360": None}
         
-        vtv_cache = self.settings.get("vtv_proxy")
-        if vtv_cache:
-            self.log(f"   -> Test VTV Proxy cũ: {vtv_cache}")
-            ping = self._test_proxy_ping(vtv_cache, "https://vtvgo.vn")
-            if ping is not None:
-                self.log(f"      ✅ Sống (Ping: {ping:.2f}s)")
-                alive_proxies["vtv"] = vtv_cache
-            else:
-                self.log("      ❌ Đã chết.")
-        
-        tv360_cache = self.settings.get("tv360_proxy")
-        if tv360_cache:
-            self.log(f"   -> Test TV360 Proxy cũ: {tv360_cache}")
-            ping = self._test_proxy_ping(tv360_cache, "https://tv360.vn")
-            if ping is not None:
-                self.log(f"      ✅ Sống (Ping: {ping:.2f}s)")
-                alive_proxies["tv360"] = tv360_cache
-            else:
-                self.log("      ❌ Đã chết.")
+        for platform in ["vtv", "tv360"]:
+            cache_str = self.settings.get(f"{platform}_proxy")
+            if cache_str:
+                self.log(f"   -> Test {platform.upper()} Proxy cũ: {cache_str}")
                 
+                # Phân tách giao thức và IP từ chuỗi cache (ví dụ: socks5://1.1.1.1:80)
+                if "://" in cache_str:
+                    protocol, ip_port = cache_str.split("://")
+                else:
+                    protocol, ip_port = "http", cache_str
+                    
+                target = "https://vtvgo.vn" if platform == "vtv" else "https://tv360.vn"
+                ping = self._test_proxy_ping(ip_port, target, protocol)
+                
+                if ping is not None:
+                    self.log(f"      ✅ Sống (Ping: {ping:.2f}s)")
+                    alive_proxies[platform] = {"ip": ip_port, "protocol": protocol}
+                else:
+                    self.log("      ❌ Đã chết.")
+                    
         return alive_proxies
 
     # ========================================================
-    # GIAI ĐOẠN 1: TẢI THE SPEEDX (CHỈ HTTP) & LỌC QUỐC GIA
+    # GIAI ĐOẠN 1: TẢI PROXYSCRAPE ĐA GIAO THỨC (ĐÃ LỌC SẴN VN)
     # ========================================================
     def _prepare_global_proxies(self):
         if not USE_AUTO_VN_PROXY: return
-        self.log("\n[GIAI ĐOẠN 1] 🔎 TẢI DANH SÁCH PROXY TỪ THESPEEDX VÀ LỌC IP VIỆT NAM...")
+        self.log("\n[GIAI ĐOẠN 1] 🔎 TẢI DANH SÁCH PROXY TỪ PROXYSCRAPE (ĐÃ LỌC SẴN IP VIỆT NAM)...")
         
         raw_pool = []
-        # CHỈ SỬ DỤNG GIAO THỨC HTTP
         sources = [
-            ("http", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt")
+            ("socks5", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=socks5&anonymity=elite&country=vn&timeout=10000"),
+            ("socks4", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=socks4&anonymity=elite&country=vn&timeout=10000"),
+            ("http", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=http&anonymity=elite&country=vn&timeout=10000")
         ]
         
         for protocol, url in sources:
             try:
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                data = urllib.request.urlopen(req, timeout=10).read().decode('utf-8')
-                count = 0
-                for line in data.split('\n'):
-                    ip_port = line.strip()
-                    if ip_port:
-                        raw_pool.append({'ip': ip_port, 'protocol': protocol})
-                        count += 1
-                self.log(f"      [Tải File] TheSpeedX {protocol.upper()}: Lấy được {count} IPs.")
+                res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+                if res.status_code == 200:
+                    data = res.text
+                    count = 0
+                    for line in data.split('\n'):
+                        ip_port = line.strip()
+                        if ip_port:
+                            raw_pool.append({'ip': ip_port, 'protocol': protocol})
+                            count += 1
+                    self.log(f"      [Tải File] ProxyScrape {protocol.upper()}: Lấy được {count} IPs.")
             except Exception as e: 
                 self.log(f"      [Lỗi] Không tải được file {protocol}: {e}")
 
@@ -297,28 +307,9 @@ class AllInOneIPTVTool:
             if p['ip'] not in unique_proxies:
                 unique_proxies[p['ip']] = p['protocol']
 
-        self.log(f"   [Geo Filter] Tổng cộng {len(unique_proxies)} IPs duy nhất. Bắt đầu Check Đa Luồng IP Việt Nam...")
-        
-        def check_geo(ip_port, protocol):
-            ip_only = ip_port.split(':')[0]
-            try:
-                url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                res = urllib.request.urlopen(req, timeout=5)
-                if json.loads(res.read().decode('utf-8')).get("country") == "VN":
-                    return {'ip': ip_port, 'protocol': protocol}
-            except: pass
-            return None
-
-        # GeoJS xử lý đa luồng rất mượt, ta dùng 500 luồng để check cho lẹ
-        with concurrent.futures.ThreadPoolExecutor(max_workers=500) as executor:
-            futures = [executor.submit(check_geo, ip, protocol) for ip, protocol in unique_proxies.items()]
-            for future in concurrent.futures.as_completed(futures):
-                res = future.result()
-                if res: 
-                    self.vn_proxies.append(res)
-            
-        self.log(f"   [Hoàn tất Tiền Xử Lý] Chắt lọc được {len(self.vn_proxies)} IP chuẩn Việt Nam làm kho đạn.")
+        # Vì API đã gọi thuộc `country=vn` nên không cần check_geo tốn thời gian nữa
+        self.vn_proxies = [{'ip': ip, 'protocol': protocol} for ip, protocol in unique_proxies.items()]
+        self.log(f"   [Hoàn tất Tiền Xử Lý] Kho đạn có {len(self.vn_proxies)} IP chuẩn Việt Nam (Bỏ qua bước quét Geo do API đã lọc chuẩn).")
         self.global_proxies_prepared = True
 
     # ========================================================
@@ -330,7 +321,7 @@ class AllInOneIPTVTool:
             self._prepare_global_proxies()
 
         target_url = "https://vtvgo.vn" if target_platform == "vtv" else "https://tv360.vn"
-        self.log(f"\n   [Ping Server] Đang kiểm tra từng Proxy vào {target_url} (Timeout 5s)...")
+        self.log(f"\n   [Ping Server] Đang kiểm tra từng Proxy vào {target_url} (Timeout 15s)...")
         
         best_ip = None
         best_protocol = "http"
@@ -343,7 +334,7 @@ class AllInOneIPTVTool:
             if ip_port in exclude_set:
                 continue
                 
-            ping_time = self._test_proxy_ping(ip_port, target_url)
+            ping_time = self._test_proxy_ping(ip_port, target_url, protocol)
             if ping_time is not None:
                 self.log(f"      -> ✅ Sống: {ip_port} | Giao thức: {protocol.upper()} | Ping: {ping_time:.2f}s")
                 if ping_time < best_ping:
@@ -353,11 +344,11 @@ class AllInOneIPTVTool:
                     
                 # EARLY EXIT (Ra ngoài vòng lặp ngay nếu tìm thấy IP dưới 2 giây)
                 if ping_time < 2.0:
-                    self.log(f"   ⚡ Tốc độ ánh sáng (< 2s). Chọn ngay {ip_port}!")
+                    self.log(f"   ⚡ Tốc độ ánh sáng (< 2s). Chọn ngay {ip_port} ({protocol.upper()})!")
                     return best_ip, best_protocol
                 
         if best_ip:
-            self.log(f"   🏆 Quét xong. Chốt IP tốt nhất: {best_ip} (Ping: {best_ping:.2f}s)")
+            self.log(f"   🏆 Quét xong. Chốt IP tốt nhất: {best_ip} ({best_protocol.upper()}) (Ping: {best_ping:.2f}s)")
             return best_ip, best_protocol
             
         self.log(f"   ❌ Toàn bộ kho IP Việt Nam đều không ping được tới {target_url}.")
@@ -410,7 +401,8 @@ class AllInOneIPTVTool:
                 ch['m3u8_link'] = f_link
                 consecutive_fails = 0
                 if current_proxy_ip:
-                    proxy_stats[current_proxy_ip] = proxy_stats.get(current_proxy_ip, 0) + 1 # Đếm số link bắt được
+                    proxy_key = f"{current_protocol}://{current_proxy_ip}"
+                    proxy_stats[proxy_key] = proxy_stats.get(proxy_key, 0) + 1 # Đếm số link bắt được
                 self.log(f"         -> ✅ Lấy Link Thành Công")
                 i += 1
             elif ch.get('skip'):
@@ -574,11 +566,11 @@ class AllInOneIPTVTool:
 
     def save_best_proxy(self, platform, proxy_stats):
         if proxy_stats:
-            best_proxy = max(proxy_stats, key=proxy_stats.get)
-            if proxy_stats[best_proxy] > 0:
-                self.settings[f"{platform}_proxy"] = best_proxy
+            best_proxy_key = max(proxy_stats, key=proxy_stats.get)
+            if proxy_stats[best_proxy_key] > 0:
+                self.settings[f"{platform}_proxy"] = best_proxy_key
                 self.save_settings()
-                self.log(f"   💾 Tự động LƯU IP Tốt Nhất cho {platform.upper()}: {best_proxy} (Bắt thành công {proxy_stats[best_proxy]} link).")
+                self.log(f"   💾 Tự động LƯU IP Tốt Nhất cho {platform.upper()}: {best_proxy_key} (Bắt thành công {proxy_stats[best_proxy_key]} link).")
                 return
         
         # Nếu tất cả đều móm (0 link), xoá bỏ cache proxy để lần sau ép cào mới
@@ -613,8 +605,8 @@ class AllInOneIPTVTool:
         # --- 1. LẤY DOM VTV VỚI CƠ CHẾ XOAY PROXY NẾU TẠCH ---
         for _ in range(3): # Cho phép xoay tối đa 3 proxy nếu DOM tạch
             if USE_AUTO_VN_PROXY and not vtv_ip:
-                if alive_cached["vtv"] and alive_cached["vtv"] not in exclude_proxies:
-                    vtv_ip, vtv_proto = alive_cached["vtv"], "http"
+                if alive_cached["vtv"] and alive_cached["vtv"]["ip"] not in exclude_proxies:
+                    vtv_ip, vtv_proto = alive_cached["vtv"]["ip"], alive_cached["vtv"]["protocol"]
                 else:
                     vtv_ip, vtv_proto = self._get_best_proxy_for_target("vtv", exclude_proxies)
             
@@ -692,7 +684,9 @@ class AllInOneIPTVTool:
                 f_link, s_msg = self.catch_m3u8_vtvgo(driver, "https://vtvgo.vn/channel/vtv1-1,1.html", max_wait=t)
                 if f_link:
                     vtv_master_link = f_link
-                    if vtv_ip: vtv_proxy_stats[vtv_ip] = vtv_proxy_stats.get(vtv_ip, 0) + 1
+                    if vtv_ip: 
+                        proxy_key = f"{vtv_proto}://{vtv_ip}"
+                        vtv_proxy_stats[proxy_key] = vtv_proxy_stats.get(proxy_key, 0) + 1
                     for ch in vtv_channels:
                         if ch['name'].upper() == "VTV1":
                             ch['m3u8_link'] = f_link
@@ -791,8 +785,8 @@ class AllInOneIPTVTool:
         dom_success = False
         for _ in range(3):
             if USE_AUTO_VN_PROXY and not tv360_ip:
-                if alive_cached["tv360"] and alive_cached["tv360"] not in exclude_proxies:
-                    tv360_ip, tv360_proto = alive_cached["tv360"], "http"
+                if alive_cached["tv360"] and alive_cached["tv360"]["ip"] not in exclude_proxies:
+                    tv360_ip, tv360_proto = alive_cached["tv360"]["ip"], alive_cached["tv360"]["protocol"]
                 else:
                     tv360_ip, tv360_proto = self._get_best_proxy_for_target("tv360", exclude_proxies)
                 
