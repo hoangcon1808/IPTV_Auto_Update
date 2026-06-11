@@ -6,10 +6,11 @@ import sys
 import os
 import json
 import re
+import socket
 import urllib.request
 import concurrent.futures
 from datetime import datetime
-import requests # Đã thêm thư viện requests
+import requests
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -101,10 +102,11 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        self.vn_proxies = [] # Lưu danh sách IP Việt Nam tổng (Tiền xử lý)
+        self.vn_proxies = [] 
         self.global_proxies_prepared = False
-        self.saved_vtv_proxy = self.settings.get("vtv_proxy")
-        self.saved_tv360_proxy = self.settings.get("tv360_proxy")
+        
+        self.saved_vtv_proxy = self.settings.get("vtv_proxy", "")
+        self.saved_tv360_proxy = self.settings.get("tv360_proxy", "")
         
         if self.headless:
             self.current_path = "vn.m3u"
@@ -143,7 +145,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy DOM & Đảo Proxy Quét Kênh.")
-            self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s) thông minh.")
+            self.log("✅ Chế độ: Đánh giá & Lưu IP xịn nhất dựa trên số Link thu hoạch được.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape SOCKS5 từ TheSpeedX đang BẬT.")
 
@@ -165,19 +167,18 @@ class AllInOneIPTVTool:
             self.log_area.config(state='disabled')
 
     def load_settings(self):
+        settings = {}
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except: pass
-        return {}
+                    settings = json.load(f)
+            except Exception: pass
+        return settings
 
     def save_settings(self):
         self.settings["path"] = self.get_file_path()
-        if hasattr(self, 'saved_vtv_proxy'):
-            self.settings["vtv_proxy"] = self.saved_vtv_proxy
-        if hasattr(self, 'saved_tv360_proxy'):
-            self.settings["tv360_proxy"] = self.saved_tv360_proxy
+        self.settings["vtv_proxy"] = getattr(self, 'saved_vtv_proxy', "")
+        self.settings["tv360_proxy"] = getattr(self, 'saved_tv360_proxy', "")
             
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
@@ -238,7 +239,6 @@ class AllInOneIPTVTool:
                 'https': f'socks5://{ip_port}'
             }
             start = time.time()
-            # Yêu cầu web thực tế xuyên qua proxy. Chỉ khi web trả về kết quả mới tính là sống.
             res = requests.get(target_url, proxies=proxies, timeout=timeout)
             if res.status_code in [200, 403, 404]: 
                 return time.time() - start
@@ -341,7 +341,7 @@ class AllInOneIPTVTool:
     # ========================================================
     # GIAI ĐOẠN 3: CÀO KÊNH VÀ XOAY VÒNG PROXY VÔ HẠN
     # ========================================================
-    def _scan_channels_with_rotation(self, driver, channels, platform, old_links_dict, exclude_set, current_proxy_ip, current_protocol):
+    def _scan_channels_with_rotation(self, driver, channels, platform, old_links_dict, exclude_set, current_proxy_ip, current_protocol, ip_stats):
         i = 0
         consecutive_fails = 0
 
@@ -382,6 +382,11 @@ class AllInOneIPTVTool:
                 ch['m3u8_link'] = f_link
                 consecutive_fails = 0
                 self.log(f"         -> ✅ Lấy Link Thành Công")
+                
+                # Ghi nhận thành tích cho IP này
+                if current_proxy_ip:
+                    ip_stats[current_proxy_ip] = ip_stats.get(current_proxy_ip, 0) + 1
+                    
                 i += 1
             elif ch.get('skip'):
                 self.log(f"         -> 💰 Kênh Thu Phí. Bỏ qua.")
@@ -553,17 +558,22 @@ class AllInOneIPTVTool:
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH VTV ======")
         vtv_ip, vtv_proto = None, "socks5"
+        vtv_ip_stats = {} # Chấm điểm IP
         
         if USE_AUTO_VN_PROXY:
-            if self.saved_vtv_proxy and self._check_proxy_alive_real(self.saved_vtv_proxy, "https://vtvgo.vn", timeout=5.0) < 5.0:
-                self.log(f"   [Proxy] Tái sử dụng IP VTV đã lưu: {self.saved_vtv_proxy}")
-                vtv_ip = self.saved_vtv_proxy
-            else:
+            if self.saved_vtv_proxy:
+                self.log(f"   [JSON] Đã tìm thấy IP VTV lưu từ lần trước: {self.saved_vtv_proxy}. Đang kiểm tra...")
+                if self._check_proxy_alive_real(self.saved_vtv_proxy, "https://vtvgo.vn", timeout=5.0) < 5.0:
+                    self.log("   -> ✅ IP cũ vẫn sống tốt. Ưu tiên sử dụng ngay!")
+                    vtv_ip = self.saved_vtv_proxy
+                else:
+                    self.log("   -> ❌ IP cũ đã tạch hoặc quá chậm. Bỏ qua và quét IP mới.")
+                    self.saved_vtv_proxy = ""
+            
+            if not vtv_ip:
                 if not self.global_proxies_prepared:
                     self._prepare_global_proxies()
                 vtv_ip, vtv_proto = self._get_best_proxy_for_target("vtv", exclude_proxies)
-                self.saved_vtv_proxy = vtv_ip
-                self.save_settings()
         
         if vtv_ip or not USE_AUTO_VN_PROXY:
             self.log(f"▶ Mở trình duyệt (Proxy: {vtv_ip} - Giao thức: {vtv_proto.upper()})")
@@ -615,8 +625,6 @@ class AllInOneIPTVTool:
                         self.log("      -> ❌ Kho IP cạn kiệt, không xoay được nữa.")
                         break
                     driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
-                    self.saved_vtv_proxy = vtv_ip
-                    self.save_settings()
                     vtv_dom_retries += 1
 
             # SỬA LỖI LOGO DATA:IMAGE CHO VTV TỪ FILE CŨ
@@ -653,6 +661,7 @@ class AllInOneIPTVTool:
                                 ch['skip'] = True 
                                 break
                         self.log(f"      -> ✅ Bắt được Link Gốc VTV thành công.")
+                        if vtv_ip: vtv_ip_stats[vtv_ip] = vtv_ip_stats.get(vtv_ip, 0) + 1
                         break
                     else:
                         if t != 240:
@@ -663,9 +672,17 @@ class AllInOneIPTVTool:
             vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
             if vtv_dynamic:
                 self.log(f"   [VTV] Bắt đầu duyệt ngầm {len(vtv_dynamic)} Kênh (Đảo Proxy nếu Fail 3 kênh)...")
-                driver, vtv_ip, vtv_proto = self._scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, exclude_proxies, vtv_ip, vtv_proto)
-                self.saved_vtv_proxy = vtv_ip
-                self.save_settings()
+                driver, vtv_ip, vtv_proto = self._scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, exclude_proxies, vtv_ip, vtv_proto, vtv_ip_stats)
+            
+            # TỔNG KẾT IP CHO VTV
+            if vtv_ip_stats:
+                best_vtv_ip = max(vtv_ip_stats, key=vtv_ip_stats.get)
+                self.saved_vtv_proxy = best_vtv_ip
+                self.log(f"   🏆 Tổng kết VTV: IP {best_vtv_ip} lấy được nhiều link nhất ({vtv_ip_stats[best_vtv_ip]} link). Đã lưu để dùng cho lần sau.")
+            else:
+                self.saved_vtv_proxy = ""
+                self.log("   ⚠️ Tổng kết VTV: Thất bại toàn tập. Đã xóa trắng IP VTV khỏi JSON.")
+            self.save_settings()
                             
             driver.quit()
 
@@ -674,17 +691,22 @@ class AllInOneIPTVTool:
         # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
         tv360_ip, tv360_proto = None, "socks5"
+        tv360_ip_stats = {} # Chấm điểm IP
         
         if USE_AUTO_VN_PROXY:
-            if self.saved_tv360_proxy and self._check_proxy_alive_real(self.saved_tv360_proxy, "https://tv360.vn", timeout=5.0) < 5.0:
-                self.log(f"   [Proxy] Tái sử dụng IP TV360 đã lưu: {self.saved_tv360_proxy}")
-                tv360_ip = self.saved_tv360_proxy
-            else:
+            if self.saved_tv360_proxy:
+                self.log(f"   [JSON] Đã tìm thấy IP TV360 lưu từ lần trước: {self.saved_tv360_proxy}. Đang kiểm tra...")
+                if self._check_proxy_alive_real(self.saved_tv360_proxy, "https://tv360.vn", timeout=5.0) < 5.0:
+                    self.log("   -> ✅ IP cũ vẫn sống tốt. Ưu tiên sử dụng ngay!")
+                    tv360_ip = self.saved_tv360_proxy
+                else:
+                    self.log("   -> ❌ IP cũ đã tạch hoặc quá chậm. Bỏ qua và quét IP mới.")
+                    self.saved_tv360_proxy = ""
+
+            if not tv360_ip:
                 if not self.global_proxies_prepared:
                     self._prepare_global_proxies()
                 tv360_ip, tv360_proto = self._get_best_proxy_for_target("tv360", exclude_proxies)
-                self.saved_tv360_proxy = tv360_ip
-                self.save_settings()
         
         js_extractor_smart = """
             var results = [];
@@ -783,8 +805,6 @@ class AllInOneIPTVTool:
                         self.log("      -> ❌ Kho IP cạn kiệt, không xoay được nữa.")
                         break
                     driver = self._reboot_driver(driver, tv360_ip, tv360_proto)
-                    self.saved_tv360_proxy = tv360_ip
-                    self.save_settings()
                     tv360_dom_retries += 1
 
             # SỬA LỖI LOGO DATA:IMAGE CHO TV360 BẰNG LOGO TỪ FILE CŨ
@@ -811,9 +831,17 @@ class AllInOneIPTVTool:
             channels_to_scan = [ch for ch in tv360_channels if ch['source'] == 'tv360_dynamic']
             if channels_to_scan:
                 self.log(f"   [TV360] Bắt đầu duyệt ngầm {len(channels_to_scan)} Kênh (Đảo Proxy nếu Fail 3 kênh)...")
-                driver, tv360_ip, tv360_proto = self._scan_channels_with_rotation(driver, channels_to_scan, 'tv360', old_links_dict, exclude_proxies, tv360_ip, tv360_proto)
-                self.saved_tv360_proxy = tv360_ip
-                self.save_settings()
+                driver, tv360_ip, tv360_proto = self._scan_channels_with_rotation(driver, channels_to_scan, 'tv360', old_links_dict, exclude_proxies, tv360_ip, tv360_proto, tv360_ip_stats)
+            
+            # TỔNG KẾT IP CHO TV360
+            if tv360_ip_stats:
+                best_tv360_ip = max(tv360_ip_stats, key=tv360_ip_stats.get)
+                self.saved_tv360_proxy = best_tv360_ip
+                self.log(f"   🏆 Tổng kết TV360: IP {best_tv360_ip} lấy được nhiều link nhất ({tv360_ip_stats[best_tv360_ip]} link). Đã lưu để dùng cho lần sau.")
+            else:
+                self.saved_tv360_proxy = ""
+                self.log("   ⚠️ Tổng kết TV360: Thất bại toàn tập. Đã xóa trắng IP TV360 khỏi JSON.")
+            self.save_settings()
             
             driver.quit()
 
