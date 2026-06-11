@@ -235,8 +235,8 @@ class AllInOneIPTVTool:
                 "https": f"{protocol}://{ip_port}"
             }
             start_time = time.time()
-            # Tăng timeout lên 15s theo yêu cầu
-            req = requests.get(target_url, proxies=proxies, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+            # Đã giảm timeout về 5s theo yêu cầu
+            req = requests.get(target_url, proxies=proxies, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
             if req.status_code == 200:
                 return time.time() - start_time
             return None
@@ -288,7 +288,7 @@ class AllInOneIPTVTool:
         
         for protocol, url in sources:
             try:
-                res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+                res = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
                 if res.status_code == 200:
                     data = res.text
                     count = 0
@@ -321,7 +321,7 @@ class AllInOneIPTVTool:
             self._prepare_global_proxies()
 
         target_url = "https://vtvgo.vn" if target_platform == "vtv" else "https://tv360.vn"
-        self.log(f"\n   [Ping Server] Đang kiểm tra từng Proxy vào {target_url} (Timeout 15s)...")
+        self.log(f"\n   [Ping Server] Đang kiểm tra từng Proxy vào {target_url} (Timeout 5s)...")
         
         best_ip = None
         best_protocol = "http"
