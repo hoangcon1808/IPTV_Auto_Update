@@ -1,9 +1,13 @@
+import sys
+import os
+
+# --- ÉP XUẤT LOG NGAY LẬP TỨC ĐỂ DEBUG GITHUB ACTIONS ---
+print("👉 [DEBUG] Đã nạp file script thành công. Chuẩn bị import thư viện...", flush=True)
+
 import tkinter as tk
 from tkinter import scrolledtext, filedialog, messagebox
 import threading
 import time
-import sys
-import os
 import json
 import re
 import urllib.request
@@ -153,7 +157,7 @@ class AllInOneIPTVTool:
     def log(self, message):
         now = datetime.now().strftime("%H:%M:%S")
         formatted_message = f"[{now}] {message}"
-        print(formatted_message) 
+        print(formatted_message, flush=True) 
         
         if not self.headless and hasattr(self, 'log_area'):
             self.log_area.config(state='normal')
@@ -949,4 +953,66 @@ class AllInOneIPTVTool:
                     else:
                         num = int(ch_id)
                         if num <= 6: folder_id = f"vtv{num}"
-                        else: folder_id = self.get_vtv_acron
+                        else: folder_id = self.get_vtv_acronym(ch_name)
+                    
+                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
+                    m3u_content += f"{new_link}\n"
+                else:
+                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
+                    m3u_content += f"{new_link}\n"
+                    
+            elif ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic'):
+                error_info = ch.get('error_msg', 'Không rõ')
+                m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
+            
+            elif ch['source'] == 'fallback_only':
+                m3u_content += f"{ch['m3u8_link']}\n"
+            
+        file_path = self.get_file_path()
+        try:
+            self.log(f"   [Debug] Đang tiến hành ghi file vào đường dẫn: {file_path}")
+            
+            dir_name = os.path.dirname(file_path)
+            if dir_name: 
+                os.makedirs(dir_name, exist_ok=True)
+                
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(m3u_content)
+            self.log(f"🎉 HOÀN TẤT! Đã xuất file M3U Hỗn hợp thành công.")
+        except Exception as e:
+            self.log(f"❌ LỖI Ghi file: {e}")
+
+    def run_update_process(self):
+        if not self.headless:
+            self.btn_manual.config(state="disabled")
+            
+        vtv_master, channels_data = self.extract_all_data()
+        if channels_data:
+            self.generate_m3u(vtv_master, channels_data)
+            
+        if not self.headless:
+            self.btn_manual.config(state="normal")
+
+    def manual_update(self):
+        threading.Thread(target=self.run_update_process, daemon=True).start()
+
+    def run_update_process_headless(self):
+        self.log("=== BẮT ĐẦU CHẠY NGẦM GITHUB (WIN MODE) ===")
+        vtv_master, channels_data = self.extract_all_data()
+        if channels_data:
+            self.generate_m3u(vtv_master, channels_data)
+        self.log("=== KẾT THÚC CHẠY NGẦM ===")
+
+print(f"👉 [DEBUG] Cờ startup truyền vào: {'--startup' in sys.argv}", flush=True)
+
+if __name__ == "__main__":
+    is_startup_mode = "--startup" in sys.argv
+    
+    if is_startup_mode:
+        app = AllInOneIPTVTool(None, headless=True)
+        app.run_update_process_headless()
+        sys.exit(0)
+    else:
+        root = tk.Tk()
+        app = AllInOneIPTVTool(root, headless=False)
+        root.mainloop()
