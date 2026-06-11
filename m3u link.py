@@ -104,7 +104,7 @@ class AllInOneIPTVTool:
         self.headless = headless
         self.settings = self.load_settings()
         
-        self.vn_proxies = [] # Lưu danh sách IP Việt Nam tổng (Tiền xử lý)
+        self.vn_proxies = [] 
         self.global_proxies_prepared = False
         
         if self.headless:
@@ -225,9 +225,6 @@ class AllInOneIPTVTool:
             except: pass
         return self._create_driver(proxy_ip, protocol)
 
-    # ========================================================
-    # GIAI ĐOẠN 0: TEST PROXY CŨ TỪ CONFIG (TIẾT KIỆM THỜI GIAN)
-    # ========================================================
     def _test_proxy_ping(self, ip_port, target_url, protocol="http"):
         try:
             proxies = {
@@ -235,13 +232,11 @@ class AllInOneIPTVTool:
                 "https": f"{protocol}://{ip_port}"
             }
             start_time = time.time()
-            # Đã giảm timeout về 5s theo yêu cầu
             req = requests.get(target_url, proxies=proxies, timeout=5, headers={'User-Agent': 'Mozilla/5.0'})
             if req.status_code == 200:
                 return time.time() - start_time
             return None
         except requests.exceptions.InvalidSchema:
-            # Bắt lỗi nếu môi trường thiếu PySocks cho giao thức SOCKS
             return None
         except Exception:
             return None
@@ -255,7 +250,6 @@ class AllInOneIPTVTool:
             if cache_str:
                 self.log(f"   -> Test {platform.upper()} Proxy cũ: {cache_str}")
                 
-                # Phân tách giao thức và IP từ chuỗi cache (ví dụ: socks5://1.1.1.1:80)
                 if "://" in cache_str:
                     protocol, ip_port = cache_str.split("://")
                 else:
@@ -272,9 +266,6 @@ class AllInOneIPTVTool:
                     
         return alive_proxies
 
-    # ========================================================
-    # GIAI ĐOẠN 1: TẢI PROXYSCRAPE ĐA GIAO THỨC (ĐÃ LỌC SẴN VN)
-    # ========================================================
     def _prepare_global_proxies(self):
         if not USE_AUTO_VN_PROXY: return
         self.log("\n[GIAI ĐOẠN 1] 🔎 TẢI DANH SÁCH PROXY TỪ PROXYSCRAPE (ĐÃ LỌC SẴN IP VIỆT NAM)...")
@@ -301,22 +292,16 @@ class AllInOneIPTVTool:
             except Exception as e: 
                 self.log(f"      [Lỗi] Không tải được file {protocol}: {e}")
 
-        # Lọc trùng lặp
         unique_proxies = {}
         for p in raw_pool:
             if p['ip'] not in unique_proxies:
                 unique_proxies[p['ip']] = p['protocol']
 
-        # Vì API đã gọi thuộc `country=vn` nên không cần check_geo tốn thời gian nữa
         self.vn_proxies = [{'ip': ip, 'protocol': protocol} for ip, protocol in unique_proxies.items()]
         self.log(f"   [Hoàn tất Tiền Xử Lý] Kho đạn có {len(self.vn_proxies)} IP chuẩn Việt Nam (Bỏ qua bước quét Geo do API đã lọc chuẩn).")
         self.global_proxies_prepared = True
 
-    # ========================================================
-    # GIAI ĐOẠN 2: TÌM PROXY THEO SERVER ĐÍCH 
-    # ========================================================
     def _get_best_proxy_for_target(self, target_platform, exclude_set):
-        # NẾU CHƯA TẢI PROXY (DO ĐẦU PHIÊN CHẠY BẰNG CACHE THÀNH CÔNG NHƯNG GIỮA CHỪNG BỊ TẠCH), BÂY GIỜ TẢI!
         if not self.global_proxies_prepared and USE_AUTO_VN_PROXY:
             self._prepare_global_proxies()
 
@@ -342,7 +327,6 @@ class AllInOneIPTVTool:
                     best_ip = ip_port
                     best_protocol = protocol
                     
-                # EARLY EXIT (Ra ngoài vòng lặp ngay nếu tìm thấy IP dưới 2 giây)
                 if ping_time < 2.0:
                     self.log(f"   ⚡ Tốc độ ánh sáng (< 2s). Chọn ngay {ip_port} ({protocol.upper()})!")
                     return best_ip, best_protocol
@@ -354,9 +338,6 @@ class AllInOneIPTVTool:
         self.log(f"   ❌ Toàn bộ kho IP Việt Nam đều không ping được tới {target_url}.")
         return None, "http"
 
-    # ========================================================
-    # GIAI ĐOẠN 3: CÀO KÊNH VÀ XOAY VÒNG PROXY VÔ HẠN
-    # ========================================================
     def _scan_channels_with_rotation(self, driver, channels, platform, old_links_dict, exclude_set, current_proxy_ip, current_protocol, proxy_stats):
         i = 0
         consecutive_fails = 0
@@ -371,12 +352,11 @@ class AllInOneIPTVTool:
             f_link = None
             s_msg = ""
             
-            # CƠ CHẾ TIMEOUT THÔNG MINH
             has_old_link = ch['name'] in old_links_dict and old_links_dict[ch['name']]['url']
             if has_old_link:
-                timeouts = [60, 120, 240] # Kênh có sẵn: Leo thang & xoá cache
+                timeouts = [60, 120, 240] 
             else:
-                timeouts = [60] # Kênh không sẵn: Chỉ đợi 1 lần 60s
+                timeouts = [60] 
 
             for t in timeouts:
                 self.log(f"      [{i+1}/{len(channels)}] Cào kênh {ch['name']} (Chờ tối đa {t}s)...")
@@ -396,13 +376,12 @@ class AllInOneIPTVTool:
                     self.log(f"         -> ❌ Timeout. Xoá Cache & Khởi động lại trình duyệt...")
                     driver = self._reboot_driver(driver, current_proxy_ip, current_protocol)
 
-            # XỬ LÝ KẾT QUẢ VÀ ĐẢO PROXY
             if f_link:
                 ch['m3u8_link'] = f_link
                 consecutive_fails = 0
                 if current_proxy_ip:
                     proxy_key = f"{current_protocol}://{current_proxy_ip}"
-                    proxy_stats[proxy_key] = proxy_stats.get(proxy_key, 0) + 1 # Đếm số link bắt được
+                    proxy_stats[proxy_key] = proxy_stats.get(proxy_key, 0) + 1 
                 self.log(f"         -> ✅ Lấy Link Thành Công")
                 i += 1
             elif ch.get('skip'):
@@ -412,7 +391,6 @@ class AllInOneIPTVTool:
             else:
                 consecutive_fails += 1
                 
-                # Áp dụng Fallback tạm thời
                 if has_old_link:
                     ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                     ch['source'] = 'fallback_only'
@@ -421,7 +399,6 @@ class AllInOneIPTVTool:
                     ch['error_msg'] = "Lỗi toàn tập"
                     self.log(f"         -> ❌ Thất bại hoàn toàn (Không có file cũ).")
 
-                # KIỂM TRA QUAY LUI VÀ ĐỔI PROXY NẾU 3 KÊNH TẠCH LIÊN TIẾP
                 if consecutive_fails >= 3:
                     self.log(f"   [CẢNH BÁO] 3 kênh liên tiếp thất bại. IP {current_proxy_ip} đã bị chặn!")
                     if current_proxy_ip:
@@ -437,17 +414,15 @@ class AllInOneIPTVTool:
                         driver = self._reboot_driver(driver, current_proxy_ip, current_protocol)
                         consecutive_fails = 0
 
-                        # Toán học quay lui: Lùi lại 3 kênh (Hoặc lùi về 0 nếu i < 3)
                         back_steps = 3
                         start_rewind = max(0, i - back_steps + 1)
 
-                        # Dọn dẹp dữ liệu rác của các kênh vừa bị đánh dấu fallback để cào lại bằng IP mới
                         for rewind_idx in range(start_rewind, i + 1):
                             channels[rewind_idx]['m3u8_link'] = None
                             channels[rewind_idx]['source'] = channels[rewind_idx]['original_source']
                             channels[rewind_idx]['error_msg'] = None
                             
-                        i = start_rewind # Đặt lại con trỏ vòng lặp
+                        i = start_rewind 
                     else:
                         self.log(f"   ❌ Kho IP đã cạn kiệt. Chấp nhận số phận, tiếp tục cào bằng Fallback...")
                         consecutive_fails = 0 
@@ -573,13 +548,11 @@ class AllInOneIPTVTool:
                 self.log(f"   💾 Tự động LƯU IP Tốt Nhất cho {platform.upper()}: {best_proxy_key} (Bắt thành công {proxy_stats[best_proxy_key]} link).")
                 return
         
-        # Nếu tất cả đều móm (0 link), xoá bỏ cache proxy để lần sau ép cào mới
         self.settings[f"{platform}_proxy"] = ""
         self.save_settings()
         self.log(f"   🗑️ Không có IP nào bắt được link cho {platform.upper()}. Đã xoá Cache Proxy để lần sau làm mới toàn bộ.")
 
     def extract_all_data(self):
-        # Tiết kiệm thời gian bằng cách test proxy cũ trước
         alive_cached = self._test_cached_proxies() if USE_AUTO_VN_PROXY else {"vtv": None, "tv360": None}
             
         self.save_settings() 
@@ -589,21 +562,16 @@ class AllInOneIPTVTool:
         tv360_channels = []
         vtv_master_link = None 
         
-        # Danh sách đen & thống kê link cào được của proxy
         exclude_proxies = set()
         vtv_proxy_stats = {}
         tv360_proxy_stats = {}
         
-        # ---------------------------------------------------------
-        # CHU TRÌNH 1: VTVGO
-        # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH VTV ======")
         vtv_ip, vtv_proto = None, "http"
         driver = None
         dom_success = False
 
-        # --- 1. LẤY DOM VTV VỚI CƠ CHẾ XOAY PROXY NẾU TẠCH ---
-        for _ in range(3): # Cho phép xoay tối đa 3 proxy nếu DOM tạch
+        for _ in range(3): 
             if USE_AUTO_VN_PROXY and not vtv_ip:
                 if alive_cached["vtv"] and alive_cached["vtv"]["ip"] not in exclude_proxies:
                     vtv_ip, vtv_proto = alive_cached["vtv"]["ip"], alive_cached["vtv"]["protocol"]
@@ -611,12 +579,11 @@ class AllInOneIPTVTool:
                     vtv_ip, vtv_proto = self._get_best_proxy_for_target("vtv", exclude_proxies)
             
             if not vtv_ip and USE_AUTO_VN_PROXY: 
-                break # Hết sạch IP
+                break 
 
             self.log(f"▶ Mở trình duyệt DOM VTV (Proxy: {vtv_ip} - Giao thức: {vtv_proto.upper()})")
             driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
             
-            # Thử 3 lần timeout với chính IP này
             for t in [60, 120, 240]:
                 self.log(f"   [VTV] Đang tải danh sách kênh (DOM) - Chờ tối đa {t}s...")
                 try:
@@ -655,13 +622,11 @@ class AllInOneIPTVTool:
 
             if dom_success: break
             
-            # Nếu chạy hết 3 lượt t mà không được DOM -> Tạch DOM. Đánh đen IP và lặp vòng ngoài xoay IP.
             if vtv_ip:
                 self.log(f"   [VTV] ⚠️ IP {vtv_ip} thất bại DOM. Loại bỏ và tìm IP khác...")
                 exclude_proxies.add(vtv_ip)
                 vtv_ip = None 
 
-        # FALLBACK DOM VTV
         if not dom_success:
             self.log("   [VTV] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục từ file M3U cũ...")
             for old_name, old_data in old_links_dict.items():
@@ -676,9 +641,7 @@ class AllInOneIPTVTool:
                     })
             self.log(f"      -> Đã khôi phục {len(vtv_channels)} kênh VTV từ file.")
 
-        # --- Tiền xử lý Timeout Gốc (Nếu IP sống qua được DOM) ---
         if driver and vtv_channels and vtv_channels[0]['source'] != 'fallback_only':
-            # --- 2. LẤY MASTER LINK (VTV1) ---
             for t in [60, 120, 240]:
                 self.log(f"   [VTV] Tiến hành cào Link M3U8 gốc qua VTV1 (Chờ tối đa {t}s)...")
                 f_link, s_msg = self.catch_m3u8_vtvgo(driver, "https://vtvgo.vn/channel/vtv1-1,1.html", max_wait=t)
@@ -698,7 +661,6 @@ class AllInOneIPTVTool:
                     self.log(f"      -> ❌ Lỗi ({s_msg}). Khởi động lại trình duyệt xoá Cache...")
                     driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
 
-            # --- 3. LẤY LINK DYNAMIC (ĐỊA PHƯƠNG) KÈM TỰ ĐỘNG ĐẢO PROXY ---
             vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
             if vtv_dynamic:
                 self.log(f"   [VTV] Bắt đầu duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương (Đảo Proxy nếu Fail 3 kênh)...")
@@ -707,9 +669,6 @@ class AllInOneIPTVTool:
         if driver: driver.quit()
         self.save_best_proxy("vtv", vtv_proxy_stats)
 
-        # ---------------------------------------------------------
-        # CHU TRÌNH 2: TV360
-        # ---------------------------------------------------------
         self.log("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
         tv360_ip, tv360_proto = None, "http"
         driver = None
@@ -733,14 +692,12 @@ class AllInOneIPTVTool:
                     var href = links[j].href;
                     if (href.includes('/tv/') && href.includes('ch=')) {
                         
-                        // LỌC VIP CHUẨN XÁC QUA CẤU TRÚC DOM 
                         if (links[j].querySelector('.css-1hssde8')) {
-                            continue; // Có mặt class này là kênh Premium
+                            continue; 
                         }
 
                         var name = links[j].getAttribute('aria-label') || links[j].innerText.trim();
                         
-                        // XỬ LÝ LAZY LOAD LOGO
                         var img = links[j].querySelector('img');
                         var logo = '';
                         if (img) {
@@ -781,7 +738,6 @@ class AllInOneIPTVTool:
             return unique;
         """
 
-        # --- 1. LẤY DOM TV360 VỚI CƠ CHẾ XOAY PROXY ---
         dom_success = False
         for _ in range(3):
             if USE_AUTO_VN_PROXY and not tv360_ip:
@@ -803,7 +759,6 @@ class AllInOneIPTVTool:
                     driver.get("https://tv360.vn/tv")
                     time.sleep(3) 
                     
-                    # LAZY LOAD TRICK: Cuộn trang từ từ xuống dưới cùng để ép ảnh load
                     driver.execute_script("""
                         var totalHeight = 0;
                         var distance = 600;
@@ -816,7 +771,7 @@ class AllInOneIPTVTool:
                             }
                         }, 250);
                     """)
-                    time.sleep(4) # Chờ ảnh render sau khi cuộn
+                    time.sleep(4) 
                     
                     dom_list = driver.execute_script(js_extractor_smart)
                     if dom_list:
@@ -842,7 +797,6 @@ class AllInOneIPTVTool:
                 exclude_proxies.add(tv360_ip)
                 tv360_ip = None
 
-        # FALLBACK & SỬA LỖI BASE64 LOGO TV360 TỪ FILE CŨ
         if not dom_success:
             self.log("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục từ file M3U cũ...")
             for old_name, old_data in old_links_dict.items():
@@ -856,13 +810,11 @@ class AllInOneIPTVTool:
                     })
             self.log(f"      -> Đã khôi phục {len(tv360_channels)} kênh TV360 từ file.")
         else:
-            # FIX LỖI DATA:IMAGE BASE64 NẾU CUỘN TRANG VẪN KHÔNG LOAD KỊP
             for c in tv360_channels:
                 if c['logo'].startswith('data:image') or not c['logo']:
                     if c['name'] in old_links_dict and old_links_dict[c['name']].get('logo'):
                         c['logo'] = old_links_dict[c['name']]['logo']
 
-        # --- 2. LẤY LINK DYNAMIC TV360 KÈM ĐẢO PROXY ---
         if driver and tv360_channels and tv360_channels[0]['source'] != 'fallback_only':
             channels_to_scan = [ch for ch in tv360_channels if ch['source'] == 'tv360_dynamic']
             if channels_to_scan:
@@ -872,9 +824,6 @@ class AllInOneIPTVTool:
         if driver: driver.quit()
         self.save_best_proxy("tv360", tv360_proxy_stats)
 
-        # ---------------------------------------------------------
-        # GOM DATA & XỬ LÝ FALLBACK STATIC CUỐI CÙNG
-        # ---------------------------------------------------------
         self.log("\n🛡️ HOÀN TẤT. XỬ LÝ FILE M3U...")
         master_channels_list = vtv_channels + tv360_channels
 
@@ -898,6 +847,18 @@ class AllInOneIPTVTool:
                 })
 
         return vtv_master_link, master_channels_list
+
+    # --- HÀM MỚI: KIỂM TRA LINK CÒN SỐNG HAY ĐÃ CHẾT ---
+    def check_link_is_alive(self, url):
+        headers = {
+            "User-Agent": "VLC/3.0.16 LibVLC/3.0.16"
+        }
+        try:
+            # Chỉ yêu cầu Header (stream=True) để ping cực nhanh, timeout 3 giây
+            response = requests.get(url, headers=headers, timeout=3, stream=True)
+            return response.status_code == 200
+        except Exception:
+            return False
 
     def generate_m3u(self, vtv_master_link, master_channels_list):
         official_vtv_group = "Kênh VTV" 
@@ -932,9 +893,11 @@ class AllInOneIPTVTool:
             ch_name = ch['name']
             group_name = ch['group_name']
             
-            m3u_content += f'#EXTINF:-1 tvg-id="{ch_name}" tvg-logo="{ch["logo"]}" group-title="{group_name}", {ch_name}\n'
+            # Lưu tạm thông tin hiển thị (tag EXTINF) của kênh
+            extinf_line = f'#EXTINF:-1 tvg-id="{ch_name}" tvg-logo="{ch["logo"]}" group-title="{group_name}", {ch_name}\n'
             
             if ch.get('m3u8_link') and ch['source'] != 'fallback_only':
+                 m3u_content += extinf_line
                  m3u_content += f"{ch['m3u8_link']}\n"
                  continue
 
@@ -950,17 +913,42 @@ class AllInOneIPTVTool:
                         else: folder_id = self.get_vtv_acronym(ch_name)
                     
                     new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
+                    m3u_content += extinf_line
                     m3u_content += f"{new_link}\n"
                 else:
                     new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
-                    m3u_content += f"{new_link}\n"
+                    
+                    # LOGIC MỚI: Tự động phát hiện kênh SCTV nội suy và kiểm tra ping HTTP
+                    is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
+                    if is_sctv:
+                        self.log(f"   [Kiểm tra SCTV Nội suy] Đang ping HTTP kênh {ch_name}...")
+                        if self.check_link_is_alive(new_link):
+                            m3u_content += extinf_line
+                            m3u_content += f"{new_link}\n"
+                        else:
+                            self.log(f"      -> ❌ Link {ch_name} trả về HTTP Lỗi (Đã chết). Đã loại bỏ khỏi playlist.")
+                    else:
+                        m3u_content += extinf_line
+                        m3u_content += f"{new_link}\n"
                     
             elif ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic'):
                 error_info = ch.get('error_msg', 'Không rõ')
+                m3u_content += extinf_line
                 m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
             
             elif ch['source'] == 'fallback_only':
-                m3u_content += f"{ch['m3u8_link']}\n"
+                # LOGIC MỚI: Nếu lấy từ file M3U cũ (Fallback) mà là kênh SCTV, cũng ping thử để dọn rác
+                is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
+                if is_sctv:
+                    self.log(f"   [Kiểm tra Fallback SCTV] Đang test link cũ kênh {ch_name}...")
+                    if self.check_link_is_alive(ch['m3u8_link']):
+                        m3u_content += extinf_line
+                        m3u_content += f"{ch['m3u8_link']}\n"
+                    else:
+                        self.log(f"      -> ❌ Link {ch_name} (từ file M3U cũ) đã chết. Đã loại bỏ.")
+                else:
+                    m3u_content += extinf_line
+                    m3u_content += f"{ch['m3u8_link']}\n"
             
         file_path = self.get_file_path()
         try:
