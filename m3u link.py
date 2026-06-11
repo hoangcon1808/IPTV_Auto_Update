@@ -140,7 +140,7 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy Vô hạn & Tự động lưu/tái sử dụng Proxy sống.")
-            self.log("✅ Chế độ: Ưu tiên SOCKS5 tuyệt đối, Ping Timeout 5s, Early Exit < 1.5s.")
+            self.log("✅ Chế độ: Lọc Geo cực gọn, Test Đa Giao Thức (Multi-Protocol Ping).")
             self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s) áp dụng thông minh.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy từ TheSpeedX đang BẬT.")
@@ -225,13 +225,14 @@ class AllInOneIPTVTool:
         return self._create_driver(proxy_ip, protocol)
 
     # ========================================================
-    # GIAI ĐOẠN 1: TẢI THE SPEEDX & LỌC QUỐC GIA (KHÔNG LỌC TRÙNG & ÉP THỨ TỰ)
+    # GIAI ĐOẠN 1: TẢI THE SPEEDX & LỌC QUỐC GIA (GỘP IP CHUNG ĐỂ TEST GEOJS NHANH)
     # ========================================================
     def _prepare_global_proxies(self):
         if not USE_AUTO_VN_PROXY: return
         self.log("\n[GIAI ĐOẠN 1] 🔎 TẢI DANH SÁCH PROXY TỪ THESPEEDX VÀ LỌC IP VIỆT NAM...")
         
-        raw_pool = []
+        raw_pool_dict = {} 
+        # Tải theo đúng thứ tự ưu tiên. Giao thức nào nạp trước sẽ đứng đầu danh sách của IP đó.
         sources = [
             ("socks5", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/socks5.txt"),
             ("http", "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"),
@@ -246,44 +247,48 @@ class AllInOneIPTVTool:
                 for line in data.split('\n'):
                     ip_port = line.strip()
                     if ip_port:
-                        # Thêm thẳng vào list, KHÔNG LỌC TRÙNG, cho phép 1 IP thử cả 3 giao thức
-                        raw_pool.append({'ip': ip_port, 'protocol': protocol})
+                        if ip_port not in raw_pool_dict:
+                            raw_pool_dict[ip_port] = []
+                        if protocol not in raw_pool_dict[ip_port]:
+                            raw_pool_dict[ip_port].append(protocol)
                         count += 1
                 self.log(f"      [Tải File] TheSpeedX {protocol.upper()}: Lấy được {count} IPs.")
             except Exception as e: 
                 self.log(f"      [Lỗi] Không tải được file {protocol}: {e}")
 
-        self.log(f"   [Geo Filter] Tổng cộng {len(raw_pool)} Proxy cần kiểm tra. Bắt đầu Check Đa Luồng IP Việt Nam...")
+        self.log(f"   [Geo Filter] Tổng cộng {len(raw_pool_dict)} IPs duy nhất cần kiểm tra Geo. Bắt đầu Check Đa Luồng...")
         
-        def check_geo(item):
-            ip_port = item['ip']
-            protocol = item['protocol']
+        def check_geo(ip_port, protocols):
             ip_only = ip_port.split(':')[0]
             try:
                 url = f"https://get.geojs.io/v1/ip/country/{ip_only}.json"
                 req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
                 res = urllib.request.urlopen(req, timeout=5)
                 if json.loads(res.read().decode('utf-8')).get("country") == "VN":
-                    return item
+                    return {'ip': ip_port, 'protocols': protocols}
             except: pass
             return None
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=500) as executor:
-            futures = [executor.submit(check_geo, p) for p in raw_pool]
+            futures = [executor.submit(check_geo, ip, protos) for ip, protos in raw_pool_dict.items()]
             for future in concurrent.futures.as_completed(futures):
                 res = future.result()
                 if res: 
                     self.vn_proxies.append(res)
                     
-        # ÉP SẮP XẾP LẠI THEO ĐÚNG THỨ TỰ ƯU TIÊN GIAO THỨC SAU KHI ĐA LUỒNG CHẠY XONG
-        protocol_priority = {'socks5': 1, 'http': 2, 'socks4': 3}
-        self.vn_proxies.sort(key=lambda x: protocol_priority.get(x['protocol'], 99))
+        # Sắp xếp kho đạn: IP nào có hỗ trợ SOCKS5 sẽ được ưu tiên đưa lên đầu mảng
+        def get_highest_priority(protocols_list):
+            if 'socks5' in protocols_list: return 1
+            if 'http' in protocols_list: return 2
+            return 3
+            
+        self.vn_proxies.sort(key=lambda x: get_highest_priority(x['protocols']))
             
         self.log(f"   [Hoàn tất Tiền Xử Lý] Chắt lọc được {len(self.vn_proxies)} IP chuẩn Việt Nam làm kho đạn.")
         self.global_proxies_prepared = True
 
     # ========================================================
-    # GIAI ĐOẠN 2: TÌM & TEST PROXY CŨ/MỚI 
+    # GIAI ĐOẠN 2: TÌM & TEST PROXY CŨ/MỚI (TEST ĐA GIAO THỨC)
     # ========================================================
     def _verify_single_proxy(self, ip_port, protocol, target_platform):
         target_url = "https://vtvgo.vn" if target_platform == "vtv" else "https://tv360.vn"
@@ -310,41 +315,41 @@ class AllInOneIPTVTool:
         
         for proxy_data in self.vn_proxies:
             ip_port = proxy_data['ip']
-            protocol = proxy_data['protocol']
-            
             if ip_port in exclude_set:
                 continue
                 
-            try:
-                proxies = {
-                    "http": f"{protocol}://{ip_port}",
-                    "https": f"{protocol}://{ip_port}"
-                }
-                
-                start_time = time.time()
-                res = requests.get(
-                    target_url, 
-                    proxies=proxies, 
-                    timeout=5, 
-                    headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-                )
-                res.raise_for_status() 
-                ping_time = time.time() - start_time
-                
-                self.log(f"      -> ✅ Sống: {ip_port} | Giao thức: {protocol.upper()} | Ping: {ping_time:.2f}s")
-                
-                if ping_time < best_ping:
-                    best_ping = ping_time
-                    best_ip = ip_port
-                    best_protocol = protocol
+            # Lặp qua tất cả các giao thức mà IP này hỗ trợ (đã được sắp xếp socks5 > http > socks4)
+            for protocol in proxy_data['protocols']:
+                try:
+                    proxies = {
+                        "http": f"{protocol}://{ip_port}",
+                        "https": f"{protocol}://{ip_port}"
+                    }
                     
-                # EARLY EXIT: Dừng tìm kiếm nếu Ping dưới 1.5 giây
-                if ping_time < 1.5:
-                    self.log(f"   ⚡ Tốc độ ánh sáng (< 1.5s). Chọn ngay {ip_port} ({protocol.upper()})!")
-                    return best_ip, best_protocol
+                    start_time = time.time()
+                    res = requests.get(
+                        target_url, 
+                        proxies=proxies, 
+                        timeout=5, 
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                    )
+                    res.raise_for_status() 
+                    ping_time = time.time() - start_time
                     
-            except Exception:
-                continue
+                    self.log(f"      -> ✅ Sống: {ip_port} | Giao thức: {protocol.upper()} | Ping: {ping_time:.2f}s")
+                    
+                    if ping_time < best_ping:
+                        best_ping = ping_time
+                        best_ip = ip_port
+                        best_protocol = protocol
+                        
+                    # EARLY EXIT: Dừng tìm kiếm nếu Ping dưới 1.5 giây
+                    if ping_time < 1.5:
+                        self.log(f"   ⚡ Tốc độ ánh sáng (< 1.5s). Chọn ngay {ip_port} ({protocol.upper()})!")
+                        return best_ip, best_protocol
+                        
+                except Exception:
+                    continue # Bị lỗi giao thức này thì thử tiếp giao thức khác của chính IP đó
                 
         if best_ip:
             self.log(f"   🏆 Quét xong. Chốt IP tốt nhất: {best_ip} ({best_protocol.upper()}) (Ping: {best_ping:.2f}s)")
