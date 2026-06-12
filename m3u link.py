@@ -144,8 +144,8 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy Vô hạn (Infinite Proxy Rotation) & Lùi 3 Bước.")
-            self.log("✅ Chế độ: Nhớ Proxy tốt nhất (Smart Caching Proxy) đang bật.")
-            self.log("✅ Ưu tiên test Proxy: HTTP -> SOCKS5 -> SOCKS4.")
+            self.log("✅ Chế độ: Ưu tiên test Proxy: HTTP -> SOCKS5 -> SOCKS4.")
+            self.log("✅ Chế độ: Lấy DOM lai (Hybrid Extraction) chống rớt gói tin.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy Đa Giao Thức từ ProxyScrape đang BẬT.")
 
@@ -507,7 +507,7 @@ class AllInOneIPTVTool:
             driver.get(url)
             time.sleep(3) 
             
-            # --- BYPASS GIỐNG HỆT TOOL GỐC ---
+            # --- CLICK ĐỒNG Ý VÀ ÉP PLAY VIDEO GIỐNG HỆT TOOL GỐC ---
             try:
                 driver.execute_script("""
                     var btns = document.getElementsByTagName('button');
@@ -618,55 +618,45 @@ class AllInOneIPTVTool:
             
             for t in [60, 120, 240]:
                 self.log(f"   [VTV] Đang tải danh sách kênh (DOM) - Chờ tối đa {t}s...")
+                state_json = None
+                
                 try:
                     driver.set_page_load_timeout(t)
                     driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                    time.sleep(3) 
-
-                    # --- DEEP DEBUG: KIỂM TRA TRƯỚC KHI CLICK ---
-                    try:
-                        current_url = driver.current_url
-                        page_title = driver.title
-                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
-                        self.log(f"      [DEEP DEBUG] URL: {current_url} | Title: {page_title}")
-                        self.log(f"      [DEEP DEBUG] Trạng thái web trước Click: {body_text}...")
-                    except Exception as meta_e:
-                        self.log(f"      [DEEP DEBUG LỖI]: Không đọc được HTML ({str(meta_e).splitlines()[0]})")
-
-                    # --- XỬ LÝ BYPASS BẰNG LOGIC CỦA TOOL GỐC ---
-                    try:
-                        driver.execute_script("""
-                            var btns = document.getElementsByTagName('button');
-                            for (var i=0; i<btns.length; i++) {
-                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
-                            }
-                            var vids = document.getElementsByTagName('video');
-                            if(vids.length>0) vids[0].play();
-                        """)
-                        self.log("      [Bypass] Đã thực thi lệnh Click Đồng Ý và Ép chạy Video giống tool gốc.")
-                    except: pass
+                    time.sleep(4) 
                     
-                    time.sleep(2) # Chờ giống hệt tool gốc
-
-                    # --- ÉP ĐỢI THEO DÕI THẺ JSON (THAY VÌ WAIT MÙ QUÁNG) ---
-                    try:
-                        WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.ID, "__INITIAL_STATE__"))
-                        )
-                        self.log("      [DEEP DEBUG] Tuyệt vời! Thẻ <script id='__INITIAL_STATE__'> đã xuất hiện trong mã nguồn.")
-                    except TimeoutException:
-                        self.log("      [DEEP DEBUG] Cảnh báo: Chờ 10s nhưng trình duyệt không tạo ra thẻ __INITIAL_STATE__.")
-                    
-                    # Cố gắng bắt JSON bằng Regex giống hệt tool gốc
+                    # CÁCH 1: TÌM BẰNG SELENIUM TRUYỀN THỐNG
                     page_source = driver.page_source
                     match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
                     
-                    # DEEP DEBUG CUỐI CÙNG: IN RA HTML NẾU KHÔNG CÓ MATCH
-                    if not match:
-                         self.log(f"      [DEEP DEBUG HTML TOÀN BỘ]: {page_source[:500]} ... (Bị cắt ngắn)")
-                         self.log("      [Lỗi] Không tìm thấy chuỗi JSON kênh bằng Regex.")
-                    else:
+                    if match:
                         state_json = json.loads(match.group(1))
+                        self.log("      [Thành công] Đã lấy JSON DOM qua trình duyệt Selenium.")
+                    else:
+                        self.log("      [DEEP DEBUG] Selenium không thấy JSON. Khả năng Proxy đã làm rớt HTML.")
+                        self.log(f"      [DEEP DEBUG HTML BỊ CẮT]: {page_source[:200]}...")
+                        
+                        # CÁCH 2 (VŨ KHÍ BÍ MẬT): DÙNG REQUESTS HTTP THUẦN LẤY HTML TRỰC TIẾP
+                        self.log("      [CỨU CÁNH] Kích hoạt luồng tải HTML thuần (Requests) đi qua Proxy...")
+                        try:
+                            req_proxies = {
+                                "http": f"{vtv_proto}://{vtv_ip}",
+                                "https": f"{vtv_proto}://{vtv_ip}"
+                            }
+                            req_headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+                            res = requests.get("https://vtvgo.vn/channel/vtv1-1,1.html", proxies=req_proxies, timeout=15, headers=req_headers)
+                            
+                            match_req = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', res.text)
+                            if match_req:
+                                state_json = json.loads(match_req.group(1))
+                                self.log("      [Thành công] Đã lấy JSON xuất sắc bằng Requests HTTP thuần!")
+                            else:
+                                self.log("      [Lỗi] Mã nguồn gốc tải từ server bằng Requests vẫn không chứa chuỗi JSON.")
+                        except Exception as req_e:
+                            self.log(f"      [Lỗi Requests] {str(req_e).splitlines()[0]}")
+
+                    # NẾU CÓ DATA, TIẾN HÀNH PHÂN TÍCH
+                    if state_json:
                         groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
                         for group in groups:
                             gn_lower = group.get('name', 'Khác').lower()
@@ -685,7 +675,7 @@ class AllInOneIPTVTool:
                                     })
                         if vtv_channels:
                             dom_success = True
-                            self.log(f"      -> Thành công! Tổng cộng lấy được {len(vtv_channels)} kênh.")
+                            self.log(f"      -> Bóc tách thành công! Lấy được {len(vtv_channels)} kênh VTV/Địa phương.")
                             break
                 
                 except Exception as e: 
