@@ -645,10 +645,12 @@ class AllInOneIPTVTool:
                     except: pass
                     
                     api_json_data = None
+                    captured_api_json = None
+                    api_auth_headers = None
                     temp_vtv_master_link = None
                     vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'manifest']
                     
-                    self.log(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API và M3U8...")
+                    self.log(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API Header và M3U8...")
                     for wait_sec in range(t):
                         logs = driver.get_log('performance')
                         for entry in logs:
@@ -656,18 +658,28 @@ class AllInOneIPTVTool:
                                 log_msg = json.loads(entry['message'])['message']
                                 method = log_msg['method']
                                 
-                                # 1. Bắt API DOM
-                                if not api_json_data and method == 'Network.responseReceived':
+                                # 1. Bắt trộm Headers lúc trình duyệt gửi request API đi (Loại bỏ request OPTIONS)
+                                if not api_auth_headers and method == 'Network.requestWillBeSent':
+                                    req_params = log_msg['params']['request']
+                                    req_url = req_params['url']
+                                    req_method = req_params.get('method', '').upper()
+                                    
+                                    if 'live-channel/api/v1/channels/byCatalog' in req_url and req_method != 'OPTIONS':
+                                        temp_headers = req_params.get('headers', {})
+                                        if any(k.lower() == 'authorization' for k in temp_headers.keys()):
+                                            api_auth_headers = temp_headers
+                                            self.log(f"      [DEBUG VTV] 🔑 Đã trộm thành công Headers/Token API từ: {req_url.split('?')[0]}")
+                                            
+                                # Lấy dự phòng dữ liệu trả về bị thiếu kênh (nếu gọi bằng tay thất bại)
+                                if not captured_api_json and method == 'Network.responseReceived':
                                     resp_url = log_msg['params']['response']['url']
                                     if 'live-channel/api/v1/channels/byCatalog' in resp_url:
                                         req_id = log_msg['params']['requestId']
-                                        self.log(f"      [DEBUG VTV] 🚨 Bắt được tín hiệu API Catalog: {resp_url.split('?')[0]}")
                                         try:
                                             body = driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': req_id})
-                                            api_json_data = json.loads(body['body'])
-                                        except Exception as cdp_e:
-                                            self.log(f"      [DEBUG VTV] ⚠️ Lỗi getResponseBody CDP: {cdp_e}")
-                                            
+                                            captured_api_json = json.loads(body['body'])
+                                        except: pass
+
                                 # 2. Bắt Link M3U8 VTV1
                                 if not temp_vtv_master_link and method == 'Network.requestWillBeSent':
                                     req_url = log_msg['params']['request']['url']
@@ -677,34 +689,82 @@ class AllInOneIPTVTool:
                                         
                             except Exception: continue
                             
-                        if api_json_data and temp_vtv_master_link:
-                            self.log(f"      [DEBUG VTV] 🎯 Đã bắt ĐỦ cả 2 dữ liệu (DOM & Link M3U8) tại giây thứ {wait_sec+1}!")
+                        # Đủ 2 thông tin cốt lõi (M3u8 và Header Token) là thoát vòng lặp chờ
+                        if api_auth_headers and temp_vtv_master_link:
+                            self.log(f"      [DEBUG VTV] 🎯 Đã có đủ Token & Link M3U8 (sau {wait_sec+1}s). Chuẩn bị Request API Thủ Công!")
                             break
                         time.sleep(1)
                         
-                    # Phân tích DOM
+                    # Giai đoạn Client Request (Bơm fetch() JS vào trình duyệt để vượt tường lửa WAF/Kong)
+                    if api_auth_headers:
+                        self.log("      [DEBUG VTV] 🚀 Gửi Fetch Request (bằng JS trong trình duyệt) để ép lấy FULL 500 KÊNH...")
+                        
+                        # Xoá các pseudo header HTTP/2 (:method, :authority...) để Chrome tự build lại
+                        clean_headers = {k: v for k, v in api_auth_headers.items() if not k.startswith(':')}
+                        
+                        js_fetch = f"""
+                        var callback = arguments[arguments.length - 1];
+                        fetch("https://web-api-vtvgo.vtvdigital.vn/live-channel/api/v1/channels/byCatalog?page=1&limit=500", {{
+                            method: "GET",
+                            headers: {json.dumps(clean_headers)}
+                        }})
+                        .then(res => res.json())
+                        .then(data => callback({{success: true, data: data}}))
+                        .catch(err => callback({{success: false, error: err.toString()}}));
+                        """
+                        try:
+                            driver.set_script_timeout(15) 
+                            res = driver.execute_async_script(js_fetch)
+                            if res and res.get('success'):
+                                api_json_data = res.get('data')
+                                self.log("      [DEBUG VTV] ✅ Fetch JS thủ công THÀNH CÔNG! Đã qua mặt bộ lọc trang VTV.")
+                            else:
+                                self.log(f"      [DEBUG VTV] ⚠️ Fetch JS lỗi: {res.get('error')}")
+                        except Exception as req_err:
+                            self.log(f"      [DEBUG VTV] ❌ Ngoại lệ gọi Fetch JS: {req_err}")
+
+                    # Fallback dùng dữ liệu bắt được ban đầu (bị thiếu do limit=20) nếu request thủ công lỗi
+                    if not api_json_data and captured_api_json:
+                        self.log("      [DEBUG VTV] ⚠️ Fallback sử dụng dữ liệu JSON bị giới hạn bắt được từ trình duyệt.")
+                        api_json_data = captured_api_json
+
+                    # Phân tích DOM từ JSON
                     if api_json_data and 'data' in api_json_data:
-                        self.log("      -> ✅ Phân tích thành công gói tin JSON từ API VTV!")
                         groups = api_json_data['data'].get('channels', [])
-                        for group in groups:
-                            gn_name = group.get('name', 'Khác')
-                            gn_lower = gn_name.lower()
-                            if any(kw in gn_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
-                                if 'vtvcab' in gn_lower: continue
-                                src_type = 'vtvgo_dynamic' if any(kw in gn_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
-                                for c in group.get('channels', []):
+                        count_channels = 0
+                        # API trả về có thể là List Group hoặc List Channel thẳng tuỳ theo tham số truyền
+                        for item in groups:
+                            if 'channels' in item: # Structure dạng Group (Catalog)
+                                gn_name = item.get('name', 'Khác')
+                                ch_list = item.get('channels', [])
+                            else: # Structure dạng Channel phẳng
+                                gn_name = 'Khác'
+                                ch_list = [item]
+
+                            for c in ch_list:
+                                gn_lower = gn_name.lower()
+                                ch_name_lower = c.get('name', '').lower()
+                                
+                                if any(kw in gn_lower or kw in ch_name_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
+                                    if 'vtvcab' in gn_lower or 'vtvcab' in ch_name_lower: continue
+                                    
+                                    src_type = 'vtvgo_dynamic' if any(kw in gn_lower or kw in ch_name_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
                                     slug = self.create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
                                     vtv_channels.append({
                                         'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                                        'group_name': gn_name, 
+                                        'group_name': gn_name if gn_name != 'Khác' else 'Địa phương', 
                                         'source': src_type,
                                         'original_source': src_type, 
                                         'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
                                         'm3u8_link': None, 'error_msg': None, 'skip': False
                                     })
-                        if vtv_channels: dom_success = True
+                                    count_channels += 1
+
+                        if vtv_channels:
+                            dom_success = True
+                            self.log(f"      -> Thành công! Phân tích được tổng cộng {count_channels} kênh VTV/SCTV/Địa Phương.")
                     else:
-                        self.log("      [DEBUG VTV] ⚠️ Không lấy được JSON. Thử Fallback DOM __INITIAL_STATE__...")
+                        self.log("      [DEBUG VTV] ⚠️ Không lấy được JSON. Thử Fallback Cổ Điển DOM __INITIAL_STATE__...")
                         page_source = driver.page_source
                         match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
                         if match:
