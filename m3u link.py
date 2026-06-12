@@ -145,7 +145,7 @@ class AllInOneIPTVTool:
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy Vô hạn (Infinite Proxy Rotation) & Lùi 3 Bước.")
             self.log("✅ Chế độ: Nhớ Proxy tốt nhất (Smart Caching Proxy) đang bật.")
-            self.log("✅ Chế độ: Deep Debug Web đang BẬT (Hiển thị chi tiết lỗi web chặn).")
+            self.log("✅ Ưu tiên test Proxy: HTTP -> SOCKS5 -> SOCKS4.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy Đa Giao Thức từ ProxyScrape đang BẬT.")
 
@@ -209,6 +209,8 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--log-level=3") 
         chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
+        # Thêm User-Agent chuẩn để tránh bị chặn như bot
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         if proxy_ip:
             chrome_options.add_argument(f'--proxy-server={protocol}://{proxy_ip}')
@@ -272,9 +274,9 @@ class AllInOneIPTVTool:
         
         raw_pool = []
         sources = [
+            ("http", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=http&anonymity=elite&country=vn&timeout=10000"),
             ("socks5", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=socks5&anonymity=elite&country=vn&timeout=10000"),
-            ("socks4", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=socks4&anonymity=elite&country=vn&timeout=10000"),
-            ("http", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=http&anonymity=elite&country=vn&timeout=10000")
+            ("socks4", "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=ipport&format=text&protocol=socks4&anonymity=elite&country=vn&timeout=10000")
         ]
         
         for protocol, url in sources:
@@ -298,7 +300,15 @@ class AllInOneIPTVTool:
                 unique_proxies[p['ip']] = p['protocol']
 
         self.vn_proxies = [{'ip': ip, 'protocol': protocol} for ip, protocol in unique_proxies.items()]
-        self.log(f"   [Hoàn tất Tiền Xử Lý] Kho đạn có {len(self.vn_proxies)} IP chuẩn Việt Nam (Bỏ qua bước quét Geo do API đã lọc chuẩn).")
+        
+        # Sắp xếp đúng theo thứ tự ưu tiên: HTTP -> SOCKS5 -> SOCKS4
+        def priority(proxy):
+            if proxy['protocol'] == 'http': return 1
+            if proxy['protocol'] == 'socks5': return 2
+            return 3
+        self.vn_proxies.sort(key=priority)
+        
+        self.log(f"   [Hoàn tất Tiền Xử Lý] Kho đạn có {len(self.vn_proxies)} IP chuẩn Việt Nam. Đã xếp thứ tự test ưu tiên HTTP.")
         self.global_proxies_prepared = True
 
     def _get_best_proxy_for_target(self, target_platform, exclude_set):
@@ -622,18 +632,8 @@ class AllInOneIPTVTool:
                     driver.set_page_load_timeout(t)
                     driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
                     time.sleep(5) 
-                    
-                    # --- DEEP DEBUG LOGGING (TRƯỚC KHI CLICK) ---
-                    try:
-                        current_url = driver.current_url
-                        page_title = driver.title
-                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
-                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
-                        self.log(f"      [DEBUG WEB] HTML mồi (Trước click): {body_text}...")
-                    except Exception as meta_e:
-                        self.log(f"      [DEBUG WEB] Lỗi lấy text: {str(meta_e).splitlines()[0]}")
 
-                    # --- XỬ LÝ VÀ BYPASS BẢNG ĐIỀU KHOẢN VTV (KHÔNG REFRESH LẠI TRANG) ---
+                    # --- XỬ LÝ VÀ BYPASS BẢNG ĐIỀU KHOẢN VTV ---
                     try:
                         popup_handled = driver.execute_script("""
                             var btns = document.querySelectorAll('button');
@@ -646,21 +646,28 @@ class AllInOneIPTVTool:
                             return false;
                         """)
                         if popup_handled:
-                            self.log("      [Bypass] Đã ấn click nút Đồng ý. Đang chờ 4 giây cho trang ẩn bảng...")
-                            time.sleep(4) # Chờ cho trang ẩn popup và load kênh ẩn bên dưới
-                    except Exception as meta_e:
-                        pass
-                        
-                    # --- DEEP DEBUG LOGGING (SAU KHI CLICK) ---
-                    try:
-                        body_text_after = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
-                        self.log(f"      [DEBUG WEB] HTML (Sau click): {body_text_after}...")
+                            time.sleep(2) # Chờ cho trang ẩn popup
                     except: pass
+                    
+                    # --- CỐ GẮNG LẤY STATE TỪ BIẾN WINDOW (CÁCH TỐI ƯU NHẤT CHO REACT/NEXT.JS) ---
+                    state_json = None
+                    try:
+                        state_json = driver.execute_script("return window.__INITIAL_STATE__;")
+                        if state_json:
+                            self.log("      [Thành công] Đã lấy được dữ liệu JSON kênh bằng biến Javascript (window.__INITIAL_STATE__).")
+                    except: pass
+                    
+                    # --- NẾU THẤT BẠI, THỬ TÌM BẰNG REGEX (CÁCH CŨ) ---
+                    if not state_json:
+                        page_source = driver.page_source
+                        match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
+                        if match:
+                            try:
+                                state_json = json.loads(match.group(1))
+                                self.log("      [Thành công] Đã tìm thấy dữ liệu JSON kênh qua phân tích mã nguồn HTML (Regex).")
+                            except: pass
 
-                    page_source = driver.page_source
-                    match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
-                    if match:
-                        state_json = json.loads(match.group(1))
+                    if state_json:
                         groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
                         for group in groups:
                             gn_lower = group.get('name', 'Khác').lower()
@@ -679,10 +686,10 @@ class AllInOneIPTVTool:
                                     })
                         if vtv_channels:
                             dom_success = True
-                            self.log(f"      -> Thành công! Lấy được {len(vtv_channels)} kênh.")
+                            self.log(f"      -> Tổng cộng lấy được {len(vtv_channels)} kênh.")
                             break
                     else:
-                        self.log("      [Lỗi] Vẫn không tìm thấy chuỗi JSON kênh trong mã nguồn web.")
+                        self.log("      [Lỗi] Không bốc được JSON qua JS cũng như không tìm thấy thẻ script trong HTML.")
                 
                 except Exception as e: 
                     self.log(f"      [LỖI SYSTEM] {str(e).splitlines()[0][:100]}")
@@ -837,16 +844,6 @@ class AllInOneIPTVTool:
                     driver.get("https://tv360.vn/tv")
                     time.sleep(4) 
                     
-                    # --- DEEP DEBUG LOGGING TV360 ---
-                    try:
-                        current_url = driver.current_url
-                        page_title = driver.title
-                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
-                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
-                        self.log(f"      [DEBUG WEB] HTML: {body_text}...")
-                    except Exception as meta_e:
-                        pass
-
                     driver.execute_script("""
                         var totalHeight = 0;
                         var distance = 600;
