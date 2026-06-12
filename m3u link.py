@@ -145,7 +145,7 @@ class AllInOneIPTVTool:
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy Vô hạn (Infinite Proxy Rotation) & Lùi 3 Bước.")
             self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s) cho kênh cũ.")
-            self.log("✅ Chế độ: Nhớ Proxy tốt nhất (Smart Caching Proxy) đang bật.")
+            self.log("✅ Chế độ: Bật bẫy Log Deep Debug để phân tích lỗi web chặn.")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy Đa Giao Thức từ ProxyScrape đang BẬT.")
 
@@ -385,7 +385,7 @@ class AllInOneIPTVTool:
                     break 
 
                 if has_old_link and t != timeouts[-1]:
-                    self.log(f"         -> ❌ Timeout. Xoá Cache & Khởi động lại trình duyệt...")
+                    self.log(f"         -> ❌ Timeout/Lỗi. Xoá Cache & Khởi động lại trình duyệt...")
                     driver = self._reboot_driver(driver, current_proxy_ip, current_protocol)
 
             if f_link:
@@ -521,9 +521,10 @@ class AllInOneIPTVTool:
                                 return req_url, "OK"
                     except: continue
                 time.sleep(1)
-            return None, f"Timeout {max_wait}s"
+            return None, f"Hết {max_wait}s không có request m3u8"
         except Exception as e:
-            return None, f"Lỗi System: {str(e)[:30]}"
+            # Sửa phần bắt Exception để hiển thị rõ lỗi của Chrome (Proxy hỏng hay gì)
+            return None, f"Lỗi System: {str(e).splitlines()[0][:100]}"
 
     def catch_m3u8_tv360(self, driver, url, max_wait=60):
         try:
@@ -547,9 +548,9 @@ class AllInOneIPTVTool:
                                 return req_url, "OK"
                     except: continue
                 time.sleep(1)
-            return None, f"Timeout {max_wait}s"
+            return None, f"Hết {max_wait}s không có request m3u8"
         except Exception as e:
-            return None, f"Lỗi System: {str(e)[:30]}"
+            return None, f"Lỗi System: {str(e).splitlines()[0][:100]}"
 
     def save_best_proxy(self, platform, proxy_stats):
         if proxy_stats:
@@ -607,8 +608,29 @@ class AllInOneIPTVTool:
                 try:
                     driver.set_page_load_timeout(t)
                     driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                    time.sleep(3) 
+                    time.sleep(4) 
                     
+                    # --- DEEP DEBUG LOGGING ---
+                    try:
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
+                        self.log(f"      [DEBUG WEB] Nội dung HTML mồi: {body_text}...")
+                    except Exception as meta_e:
+                        self.log(f"      [DEBUG WEB] Lỗi khi lấy thông tin trang: {str(meta_e).splitlines()[0]}")
+
+                    # --- THỬ CLICK BẢNG ĐIỀU KHOẢN (NẾU CÓ) ---
+                    try:
+                        driver.execute_script("""
+                            var btns = document.getElementsByTagName('button');
+                            for (var i=0; i<btns.length; i++) {
+                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
+                            }
+                        """)
+                        time.sleep(1) # Chờ popup biến mất
+                    except: pass
+
                     page_source = driver.page_source
                     match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
                     if match:
@@ -633,15 +655,21 @@ class AllInOneIPTVTool:
                             dom_success = True
                             self.log(f"      -> Thành công! Lấy được {len(vtv_channels)} kênh.")
                             break
-                except: pass
+                    else:
+                        self.log("      [DEBUG WEB] Không tìm thấy chuỗi JSON kênh trong mã nguồn web.")
                 
-                self.log(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
-                driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
+                except Exception as e: 
+                    # Bắt Exception ở đây để xem có phải lỗi Chrome từ chối Proxy hay Timeout thực sự
+                    self.log(f"      [DEBUG LỖI] System Exception: {str(e).splitlines()[0][:100]}")
+                
+                if not dom_success:
+                    self.log(f"      -> Thất bại việc lấy DOM. Đang khởi động lại trình duyệt xoá Cache...")
+                    driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
 
             if dom_success: break
             
             if vtv_ip:
-                self.log(f"   [VTV] ⚠️ IP {vtv_ip} thất bại DOM. Loại bỏ và tìm IP khác...")
+                self.log(f"   [VTV] ⚠️ IP {vtv_ip} thất bại hoàn toàn lấy DOM. Loại bỏ và tìm IP khác...")
                 exclude_proxies.add(vtv_ip)
                 vtv_ip = None 
 
@@ -782,8 +810,18 @@ class AllInOneIPTVTool:
                 try:
                     driver.set_page_load_timeout(t)
                     driver.get("https://tv360.vn/tv")
-                    time.sleep(3) 
+                    time.sleep(4) 
                     
+                    # --- DEEP DEBUG LOGGING ---
+                    try:
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
+                        self.log(f"      [DEBUG WEB] Nội dung HTML mồi: {body_text}...")
+                    except Exception as meta_e:
+                        self.log(f"      [DEBUG WEB] Lỗi khi lấy thông tin trang: {str(meta_e).splitlines()[0]}")
+
                     driver.execute_script("""
                         var totalHeight = 0;
                         var distance = 600;
@@ -810,15 +848,20 @@ class AllInOneIPTVTool:
                         dom_success = True
                         self.log(f"      -> Thành công! Lấy được {len(tv360_channels)} kênh miễn phí.")
                         break
-                except: pass
+                    else:
+                        self.log("      [DEBUG WEB] Không lấy được mảng DOM nào từ Javascript.")
+                        
+                except Exception as e: 
+                    self.log(f"      [DEBUG LỖI] System Exception: {str(e).splitlines()[0][:100]}")
                 
-                self.log(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
-                driver = self._reboot_driver(driver, tv360_ip, tv360_proto)
+                if not dom_success:
+                    self.log(f"      -> Thất bại việc lấy DOM. Đang khởi động lại trình duyệt xoá Cache...")
+                    driver = self._reboot_driver(driver, tv360_ip, tv360_proto)
                 
             if dom_success: break
             
             if tv360_ip:
-                self.log(f"   [TV360] ⚠️ IP {tv360_ip} thất bại DOM. Loại bỏ và tìm IP khác...")
+                self.log(f"   [TV360] ⚠️ IP {tv360_ip} thất bại hoàn toàn lấy DOM. Loại bỏ và tìm IP khác...")
                 exclude_proxies.add(tv360_ip)
                 tv360_ip = None
 
@@ -873,13 +916,11 @@ class AllInOneIPTVTool:
 
         return vtv_master_link, master_channels_list
 
-    # --- HÀM MỚI: KIỂM TRA LINK CÒN SỐNG HAY ĐÃ CHẾT ---
     def check_link_is_alive(self, url):
         headers = {
             "User-Agent": "VLC/3.0.16 LibVLC/3.0.16"
         }
         try:
-            # Chỉ yêu cầu Header (stream=True) để ping cực nhanh, timeout 3 giây
             response = requests.get(url, headers=headers, timeout=3, stream=True)
             return response.status_code == 200
         except Exception:
@@ -918,7 +959,6 @@ class AllInOneIPTVTool:
             ch_name = ch['name']
             group_name = ch['group_name']
             
-            # Lưu tạm thông tin hiển thị (tag EXTINF) của kênh
             extinf_line = f'#EXTINF:-1 tvg-id="{ch_name}" tvg-logo="{ch["logo"]}" group-title="{group_name}", {ch_name}\n'
             
             if ch.get('m3u8_link') and ch['source'] != 'fallback_only':
@@ -943,7 +983,6 @@ class AllInOneIPTVTool:
                 else:
                     new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
                     
-                    # LOGIC MỚI: Tự động phát hiện kênh SCTV nội suy và kiểm tra ping HTTP
                     is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
                     if is_sctv:
                         self.log(f"   [Kiểm tra SCTV Nội suy] Đang ping HTTP kênh {ch_name}...")
@@ -962,7 +1001,6 @@ class AllInOneIPTVTool:
                 m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
             
             elif ch['source'] == 'fallback_only':
-                # LOGIC MỚI: Nếu lấy từ file M3U cũ (Fallback) mà là kênh SCTV, cũng ping thử để dọn rác
                 is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
                 if is_sctv:
                     self.log(f"   [Kiểm tra Fallback SCTV] Đang test link cũ kênh {ch_name}...")
