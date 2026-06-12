@@ -353,6 +353,18 @@ class AllInOneIPTVTool:
             s_msg = ""
             
             has_old_link = ch['name'] in old_links_dict and old_links_dict[ch['name']]['url']
+            
+            if not ch.get('url'):
+                if has_old_link:
+                    ch['m3u8_link'] = old_links_dict[ch['name']]['url']
+                    ch['source'] = 'fallback_only'
+                    self.log(f"         [{i+1}/{len(channels)}] Kênh {ch['name']}: ⚠️ DOM Fallback không có URL web. Áp dụng Link Fallback thành công.")
+                else:
+                    ch['error_msg'] = "Không có URL để quét"
+                    self.log(f"         [{i+1}/{len(channels)}] Kênh {ch['name']}: ❌ Thất bại (Không có URL web, không có link cũ).")
+                i += 1
+                continue
+
             if has_old_link:
                 timeouts = [60, 120, 240] 
             else:
@@ -394,7 +406,7 @@ class AllInOneIPTVTool:
                 if has_old_link:
                     ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                     ch['source'] = 'fallback_only'
-                    self.log(f"         -> ⚠️ Thất bại. Fallback lấy link từ file cũ thành công.")
+                    self.log(f"         -> ⚠️ Thất bại. Link Fallback lấy từ file cũ thành công.")
                 else:
                     ch['error_msg'] = "Lỗi toàn tập"
                     self.log(f"         -> ❌ Thất bại hoàn toàn (Không có file cũ).")
@@ -570,8 +582,9 @@ class AllInOneIPTVTool:
         vtv_ip, vtv_proto = None, "http"
         driver = None
         dom_success = False
+        no_proxy_attempts = 0
 
-        for _ in range(3): 
+        while True: 
             if USE_AUTO_VN_PROXY and not vtv_ip:
                 if alive_cached["vtv"] and alive_cached["vtv"]["ip"] not in exclude_proxies:
                     vtv_ip, vtv_proto = alive_cached["vtv"]["ip"], alive_cached["vtv"]["protocol"]
@@ -580,6 +593,11 @@ class AllInOneIPTVTool:
             
             if not vtv_ip and USE_AUTO_VN_PROXY: 
                 break 
+
+            if not USE_AUTO_VN_PROXY:
+                if no_proxy_attempts >= 3:
+                    break
+                no_proxy_attempts += 1
 
             self.log(f"▶ Mở trình duyệt DOM VTV (Proxy: {vtv_ip} - Giao thức: {vtv_proto.upper()})")
             driver = self._reboot_driver(driver, vtv_ip, vtv_proto)
@@ -628,18 +646,19 @@ class AllInOneIPTVTool:
                 vtv_ip = None 
 
         if not dom_success:
-            self.log("   [VTV] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục từ file M3U cũ...")
+            self.log("   [VTV] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
             for old_name, old_data in old_links_dict.items():
                 gn_lower = old_data.get('group', '').lower()
                 if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
                     if 'vtvcab' in gn_lower: continue
+                    src_type = 'vtvgo_static' if ('vtv' in gn_lower or 'sctv' in gn_lower) else 'vtvgo_dynamic'
                     vtv_channels.append({
                         'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
                         'group_name': old_data.get('group', 'Khác'), 
-                        'source': 'fallback_only', 'original_source': 'fallback_only',
-                        'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
+                        'source': src_type, 'original_source': src_type,
+                        'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
                     })
-            self.log(f"      -> Đã khôi phục {len(vtv_channels)} kênh VTV từ file.")
+            self.log(f"      -> Đã khôi phục DOM {len(vtv_channels)} kênh VTV từ file.")
 
         if driver and vtv_channels and vtv_channels[0]['source'] != 'fallback_only':
             for t in [60, 120, 240]:
@@ -739,7 +758,8 @@ class AllInOneIPTVTool:
         """
 
         dom_success = False
-        for _ in range(3):
+        no_proxy_attempts = 0
+        while True:
             if USE_AUTO_VN_PROXY and not tv360_ip:
                 if alive_cached["tv360"] and alive_cached["tv360"]["ip"] not in exclude_proxies:
                     tv360_ip, tv360_proto = alive_cached["tv360"]["ip"], alive_cached["tv360"]["protocol"]
@@ -749,6 +769,11 @@ class AllInOneIPTVTool:
             if not tv360_ip and USE_AUTO_VN_PROXY:
                 break
                 
+            if not USE_AUTO_VN_PROXY:
+                if no_proxy_attempts >= 3:
+                    break
+                no_proxy_attempts += 1
+
             self.log(f"▶ Mở trình duyệt DOM TV360 (Proxy: {tv360_ip} - Giao thức: {tv360_proto.upper()})")
             driver = self._reboot_driver(driver, tv360_ip, tv360_proto)
             
@@ -798,17 +823,17 @@ class AllInOneIPTVTool:
                 tv360_ip = None
 
         if not dom_success:
-            self.log("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục từ file M3U cũ...")
+            self.log("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
             for old_name, old_data in old_links_dict.items():
                 gn_lower = old_data.get('group', '').lower()
                 if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
                     tv360_channels.append({
                         'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
                         'group_name': old_data.get('group', 'Khác'), 
-                        'source': 'fallback_only', 'original_source': 'fallback_only',
-                        'url': '', 'm3u8_link': old_data['url'], 'error_msg': None, 'skip': False
+                        'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
+                        'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
                     })
-            self.log(f"      -> Đã khôi phục {len(tv360_channels)} kênh TV360 từ file.")
+            self.log(f"      -> Đã khôi phục DOM {len(tv360_channels)} kênh TV360 từ file.")
         else:
             for c in tv360_channels:
                 if c['logo'].startswith('data:image') or not c['logo']:
@@ -878,9 +903,9 @@ class AllInOneIPTVTool:
             if 'vtv' in gn_lower: return 1
             if 'htv' in gn_lower: return 3
             if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'ttvl' in gn_lower: return 4
-            if 'sctv' in gn_lower: return 5
-            if 'địa phương' in gn_lower or 'dia phuong' in gn_lower: return 6
-            return 7 
+            if 'địa phương' in gn_lower or 'dia phuong' in gn_lower: return 5
+            if 'sctv' in gn_lower: return 8 
+            return 6 
 
         master_channels_list.sort(key=lambda x: get_group_priority(x['group_name']))
 
