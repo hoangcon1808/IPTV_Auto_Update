@@ -144,8 +144,8 @@ class AllInOneIPTVTool:
 
             self.log("=== ALL IN ONE IPTV TOOL ===")
             self.log("✅ Chế độ: Đảo Proxy Vô hạn (Infinite Proxy Rotation) & Lùi 3 Bước.")
-            self.log("✅ Chế độ: Timeout leo thang (60s -> 120s -> 240s) cho kênh cũ.")
             self.log("✅ Chế độ: Nhớ Proxy tốt nhất (Smart Caching Proxy) đang bật.")
+            self.log("✅ Chế độ: Deep Debug Web đang BẬT (Hiển thị chi tiết lỗi web chặn).")
             if USE_AUTO_VN_PROXY:
                 self.log("✅ Chế độ Auto-Scrape Proxy Đa Giao Thức từ ProxyScrape đang BẬT.")
 
@@ -500,8 +500,8 @@ class AllInOneIPTVTool:
             
             # --- BYPASS VTV POPUP LÚC QUÉT VIDEO ---
             try:
-                popup_handled = driver.execute_script("""
-                    var btns = document.getElementsByTagName('button');
+                driver.execute_script("""
+                    var btns = document.querySelectorAll('button');
                     for (var i=0; i<btns.length; i++) {
                         if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) {
                             btns[i].click();
@@ -510,10 +510,7 @@ class AllInOneIPTVTool:
                     }
                     return false;
                 """)
-                if popup_handled:
-                    time.sleep(2)
-                    driver.refresh() # Tải lại trang sau khi click để load m3u8
-                    time.sleep(4)
+                time.sleep(2)
             except: pass
             
             # Xóa log cũ trước khi bắt đầu soi Network
@@ -624,12 +621,22 @@ class AllInOneIPTVTool:
                 try:
                     driver.set_page_load_timeout(t)
                     driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                    time.sleep(4) 
+                    time.sleep(5) 
                     
-                    # --- XỬ LÝ VÀ BYPASS BẢNG ĐIỀU KHOẢN VTV ---
+                    # --- DEEP DEBUG LOGGING (TRƯỚC KHI CLICK) ---
+                    try:
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
+                        self.log(f"      [DEBUG WEB] HTML mồi (Trước click): {body_text}...")
+                    except Exception as meta_e:
+                        self.log(f"      [DEBUG WEB] Lỗi lấy text: {str(meta_e).splitlines()[0]}")
+
+                    # --- XỬ LÝ VÀ BYPASS BẢNG ĐIỀU KHOẢN VTV (KHÔNG REFRESH LẠI TRANG) ---
                     try:
                         popup_handled = driver.execute_script("""
-                            var btns = document.getElementsByTagName('button');
+                            var btns = document.querySelectorAll('button');
                             for (var i=0; i<btns.length; i++) {
                                 if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) {
                                     btns[i].click();
@@ -639,12 +646,16 @@ class AllInOneIPTVTool:
                             return false;
                         """)
                         if popup_handled:
-                            self.log("      [Bypass] Đã click Đồng ý điều khoản. Tiến hành Refresh trang để lấy DOM thực...")
-                            time.sleep(2)
-                            driver.refresh() # Tải lại trang với Cookie đã lưu
-                            time.sleep(4)    # Chờ trang DOM thực render
+                            self.log("      [Bypass] Đã ấn click nút Đồng ý. Đang chờ 4 giây cho trang ẩn bảng...")
+                            time.sleep(4) # Chờ cho trang ẩn popup và load kênh ẩn bên dưới
                     except Exception as meta_e:
-                        pass # Bỏ qua nếu không click được
+                        pass
+                        
+                    # --- DEEP DEBUG LOGGING (SAU KHI CLICK) ---
+                    try:
+                        body_text_after = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEBUG WEB] HTML (Sau click): {body_text_after}...")
+                    except: pass
 
                     page_source = driver.page_source
                     match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
@@ -671,7 +682,7 @@ class AllInOneIPTVTool:
                             self.log(f"      -> Thành công! Lấy được {len(vtv_channels)} kênh.")
                             break
                     else:
-                        self.log("      [Lỗi] Không tìm thấy chuỗi JSON kênh trong mã nguồn web dù đã bypass.")
+                        self.log("      [Lỗi] Vẫn không tìm thấy chuỗi JSON kênh trong mã nguồn web.")
                 
                 except Exception as e: 
                     self.log(f"      [LỖI SYSTEM] {str(e).splitlines()[0][:100]}")
@@ -826,6 +837,16 @@ class AllInOneIPTVTool:
                     driver.get("https://tv360.vn/tv")
                     time.sleep(4) 
                     
+                    # --- DEEP DEBUG LOGGING TV360 ---
+                    try:
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEBUG WEB] URL: {current_url} | Title: {page_title}")
+                        self.log(f"      [DEBUG WEB] HTML: {body_text}...")
+                    except Exception as meta_e:
+                        pass
+
                     driver.execute_script("""
                         var totalHeight = 0;
                         var distance = 600;
@@ -854,7 +875,7 @@ class AllInOneIPTVTool:
                         break
                         
                 except Exception as e: 
-                    pass
+                    self.log(f"      [LỖI SYSTEM] {str(e).splitlines()[0][:100]}")
                 
                 if not dom_success:
                     self.log(f"      -> Thất bại việc lấy DOM. Đang khởi động lại trình duyệt xoá Cache...")
