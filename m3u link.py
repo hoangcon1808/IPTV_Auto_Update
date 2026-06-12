@@ -209,7 +209,6 @@ class AllInOneIPTVTool:
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--log-level=3") 
         chrome_options.add_argument("--autoplay-policy=no-user-gesture-required")
-        # Thêm User-Agent chuẩn để tránh bị chặn như bot
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
         if proxy_ip:
@@ -508,30 +507,21 @@ class AllInOneIPTVTool:
             driver.get(url)
             time.sleep(3) 
             
-            # --- BYPASS VTV POPUP LÚC QUÉT VIDEO ---
+            # --- BYPASS GIỐNG HỆT TOOL GỐC ---
             try:
                 driver.execute_script("""
-                    var btns = document.querySelectorAll('button');
+                    var btns = document.getElementsByTagName('button');
                     for (var i=0; i<btns.length; i++) {
-                        if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) {
-                            btns[i].click();
-                            return true;
-                        }
+                        if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
                     }
-                    return false;
+                    var vids = document.getElementsByTagName('video');
+                    if (vids.length > 0) vids[0].play();
                 """)
                 time.sleep(2)
             except: pass
             
             # Xóa log cũ trước khi bắt đầu soi Network
             driver.get_log('performance')
-
-            try:
-                driver.execute_script("""
-                    var vids = document.getElementsByTagName('video');
-                    if (vids.length > 0) vids[0].play();
-                """)
-            except: pass
 
             for i in range(max_wait):  
                 logs = driver.get_log('performance')
@@ -631,43 +621,52 @@ class AllInOneIPTVTool:
                 try:
                     driver.set_page_load_timeout(t)
                     driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                    time.sleep(5) 
+                    time.sleep(3) 
 
-                    # --- XỬ LÝ VÀ BYPASS BẢNG ĐIỀU KHOẢN VTV ---
+                    # --- DEEP DEBUG: KIỂM TRA TRƯỚC KHI CLICK ---
                     try:
-                        popup_handled = driver.execute_script("""
-                            var btns = document.querySelectorAll('button');
+                        current_url = driver.current_url
+                        page_title = driver.title
+                        body_text = driver.execute_script("return document.body.innerText || '';")[:100].replace('\n', ' ')
+                        self.log(f"      [DEEP DEBUG] URL: {current_url} | Title: {page_title}")
+                        self.log(f"      [DEEP DEBUG] Trạng thái web trước Click: {body_text}...")
+                    except Exception as meta_e:
+                        self.log(f"      [DEEP DEBUG LỖI]: Không đọc được HTML ({str(meta_e).splitlines()[0]})")
+
+                    # --- XỬ LÝ BYPASS BẰNG LOGIC CỦA TOOL GỐC ---
+                    try:
+                        driver.execute_script("""
+                            var btns = document.getElementsByTagName('button');
                             for (var i=0; i<btns.length; i++) {
-                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) {
-                                    btns[i].click();
-                                    return true;
-                                }
+                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
                             }
-                            return false;
+                            var vids = document.getElementsByTagName('video');
+                            if(vids.length>0) vids[0].play();
                         """)
-                        if popup_handled:
-                            time.sleep(2) # Chờ cho trang ẩn popup
+                        self.log("      [Bypass] Đã thực thi lệnh Click Đồng Ý và Ép chạy Video giống tool gốc.")
                     except: pass
                     
-                    # --- CỐ GẮNG LẤY STATE TỪ BIẾN WINDOW (CÁCH TỐI ƯU NHẤT CHO REACT/NEXT.JS) ---
-                    state_json = None
-                    try:
-                        state_json = driver.execute_script("return window.__INITIAL_STATE__;")
-                        if state_json:
-                            self.log("      [Thành công] Đã lấy được dữ liệu JSON kênh bằng biến Javascript (window.__INITIAL_STATE__).")
-                    except: pass
-                    
-                    # --- NẾU THẤT BẠI, THỬ TÌM BẰNG REGEX (CÁCH CŨ) ---
-                    if not state_json:
-                        page_source = driver.page_source
-                        match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
-                        if match:
-                            try:
-                                state_json = json.loads(match.group(1))
-                                self.log("      [Thành công] Đã tìm thấy dữ liệu JSON kênh qua phân tích mã nguồn HTML (Regex).")
-                            except: pass
+                    time.sleep(2) # Chờ giống hệt tool gốc
 
-                    if state_json:
+                    # --- ÉP ĐỢI THEO DÕI THẺ JSON (THAY VÌ WAIT MÙ QUÁNG) ---
+                    try:
+                        WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.ID, "__INITIAL_STATE__"))
+                        )
+                        self.log("      [DEEP DEBUG] Tuyệt vời! Thẻ <script id='__INITIAL_STATE__'> đã xuất hiện trong mã nguồn.")
+                    except TimeoutException:
+                        self.log("      [DEEP DEBUG] Cảnh báo: Chờ 10s nhưng trình duyệt không tạo ra thẻ __INITIAL_STATE__.")
+                    
+                    # Cố gắng bắt JSON bằng Regex giống hệt tool gốc
+                    page_source = driver.page_source
+                    match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
+                    
+                    # DEEP DEBUG CUỐI CÙNG: IN RA HTML NẾU KHÔNG CÓ MATCH
+                    if not match:
+                         self.log(f"      [DEEP DEBUG HTML TOÀN BỘ]: {page_source[:500]} ... (Bị cắt ngắn)")
+                         self.log("      [Lỗi] Không tìm thấy chuỗi JSON kênh bằng Regex.")
+                    else:
+                        state_json = json.loads(match.group(1))
                         groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
                         for group in groups:
                             gn_lower = group.get('name', 'Khác').lower()
@@ -686,10 +685,8 @@ class AllInOneIPTVTool:
                                     })
                         if vtv_channels:
                             dom_success = True
-                            self.log(f"      -> Tổng cộng lấy được {len(vtv_channels)} kênh.")
+                            self.log(f"      -> Thành công! Tổng cộng lấy được {len(vtv_channels)} kênh.")
                             break
-                    else:
-                        self.log("      [Lỗi] Không bốc được JSON qua JS cũng như không tìm thấy thẻ script trong HTML.")
                 
                 except Exception as e: 
                     self.log(f"      [LỖI SYSTEM] {str(e).splitlines()[0][:100]}")
