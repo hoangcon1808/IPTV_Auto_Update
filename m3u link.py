@@ -1038,17 +1038,35 @@ class AllInOneIPTVTool:
 
         return vtv_master_link, master_channels_list
 
-    # --- HÀM MỚI: KIỂM TRA LINK CÒN SỐNG HAY ĐÃ CHẾT ---
-    def check_link_is_alive(self, url):
+    # --- HÀM MỚI: KIỂM TRA LINK CÒN SỐNG HAY ĐÃ CHẾT BẰNG PROXY (TRÁNH BLOCK IP NƯỚC NGOÀI) ---
+    def check_link_is_alive(self, url, proxy_ip=None, protocol="http"):
         headers = {
             "User-Agent": "VLC/3.0.16 LibVLC/3.0.16"
         }
+        proxies = None
+        if proxy_ip:
+            proxies = {"http": f"{protocol}://{proxy_ip}", "https": f"{protocol}://{proxy_ip}"}
+            
         try:
-            # Chỉ yêu cầu Header (stream=True) để ping cực nhanh, timeout 3 giây
-            response = requests.get(url, headers=headers, timeout=3, stream=True)
+            # Tăng timeout lên 5s vì proxy thường chậm
+            response = requests.get(url, headers=headers, proxies=proxies, timeout=5, stream=True)
             return response.status_code == 200
         except Exception:
             return False
+
+    def _find_proxy_for_streaming(self, master_link, exclude_set):
+        self.log("   [Ping Nội Suy] 🔄 Đang tìm Proxy có khả năng Stream (Ping test nghiệm thu VTV1)...")
+        for proxy_data in self.vn_proxies:
+            ip_port = proxy_data['ip']
+            protocol = proxy_data['protocol']
+            if ip_port in exclude_set: continue
+
+            # Lấy proxy cắm vào ping VTV1. Nếu sống thì proxy này stream tốt.
+            if self.check_link_is_alive(master_link, ip_port, protocol):
+                self.log(f"      -> ✅ Bắt được Proxy Stream tốt: {ip_port} ({protocol.upper()})")
+                return ip_port, protocol
+                
+        return None, "http"
 
     def generate_m3u(self, vtv_master_link, master_channels_list):
         official_vtv_group = "Kênh VTV" 
@@ -1075,6 +1093,11 @@ class AllInOneIPTVTool:
         master_channels_list.sort(key=lambda x: get_group_priority(x['group_name']))
 
         m3u_content = "#EXTM3U\n"
+        
+        # Quản lý Proxy phục vụ cho việc Ping SCTV (tránh bị ban)
+        streaming_proxy_ip = None
+        streaming_proxy_proto = "http"
+        banned_streaming_proxies = set()
         
         for ch in master_channels_list:
             if ch.get('skip') and not ch.get('m3u8_link'): continue 
@@ -1108,15 +1131,47 @@ class AllInOneIPTVTool:
                 else:
                     new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
                     
-                    # LOGIC MỚI: Tự động phát hiện kênh SCTV nội suy và kiểm tra ping HTTP
+                    # LOGIC MỚI: Kiểm tra nội suy bằng thuật toán xoay vòng Proxy
                     is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
                     if is_sctv:
-                        self.log(f"   [Kiểm tra SCTV Nội suy] Đang ping HTTP kênh {ch_name}...")
-                        if self.check_link_is_alive(new_link):
+                        self.log(f"   [Kiểm tra SCTV Nội suy] Đang test kênh {ch_name}...")
+                        link_is_ok = False
+                        
+                        if not USE_AUTO_VN_PROXY:
+                            # Máy chạy tại VN thì cứ ping trực tiếp
+                            link_is_ok = self.check_link_is_alive(new_link)
+                            if not link_is_ok: self.log(f"      -> ❌ Link {ch_name} trả về HTTP Lỗi (Đã chết). Đã loại bỏ.")
+                        else:
+                            # Chạy trên Github Actions: Dùng proxy xoay vòng để ping
+                            for attempt in range(3): # Cho phép xoay tối đa 3 proxy mỗi kênh
+                                if not streaming_proxy_ip:
+                                    streaming_proxy_ip, streaming_proxy_proto = self._find_proxy_for_streaming(vtv_master_link, banned_streaming_proxies)
+
+                                if not streaming_proxy_ip:
+                                    self.log("      ⚠️ Đã cạn kiệt toàn bộ Proxy Stream! Để an toàn, TOOL SẼ GIỮ LẠI LINK này thay vì xoá bỏ.")
+                                    link_is_ok = True 
+                                    break
+
+                                # Tiến hành ping link SCTV bằng Proxy hiện tại
+                                is_alive = self.check_link_is_alive(new_link, streaming_proxy_ip, streaming_proxy_proto)
+                                if is_alive:
+                                    link_is_ok = True
+                                    break
+                                else:
+                                    # Kênh SCTV ping hỏng -> Phải kiểm tra chéo xem do Kênh chết hay Proxy chết
+                                    proxy_health_check = self.check_link_is_alive(vtv_master_link, streaming_proxy_ip, streaming_proxy_proto)
+                                    if proxy_health_check:
+                                        self.log(f"      -> ❌ Link {ch_name} thực sự đã CHẾT (Bởi vì proxy vẫn đang sống). Đã loại bỏ.")
+                                        link_is_ok = False
+                                        break
+                                    else:
+                                        self.log(f"      -> ⚠️ Proxy {streaming_proxy_ip} đã bị Block. Đang vứt bỏ và tìm proxy mới...")
+                                        banned_streaming_proxies.add(streaming_proxy_ip)
+                                        streaming_proxy_ip = None
+
+                        if link_is_ok:
                             m3u_content += extinf_line
                             m3u_content += f"{new_link}\n"
-                        else:
-                            self.log(f"      -> ❌ Link {ch_name} trả về HTTP Lỗi (Đã chết). Đã loại bỏ khỏi playlist.")
                     else:
                         m3u_content += extinf_line
                         m3u_content += f"{new_link}\n"
@@ -1127,15 +1182,43 @@ class AllInOneIPTVTool:
                 m3u_content += f"# Lỗi: {error_info} | Link test: {ch['url']}\n"
             
             elif ch['source'] == 'fallback_only':
-                # LOGIC MỚI: Nếu lấy từ file M3U cũ (Fallback) mà là kênh SCTV, cũng ping thử để dọn rác
+                # LOGIC MỚI: Kiểm tra link fallback M3U cũ cũng xài thuật toán Proxy giống hệt ở trên
                 is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
-                if is_sctv:
+                if is_sctv and vtv_master_link:
                     self.log(f"   [Kiểm tra Fallback SCTV] Đang test link cũ kênh {ch_name}...")
-                    if self.check_link_is_alive(ch['m3u8_link']):
+                    link_is_ok = False
+                    
+                    if not USE_AUTO_VN_PROXY:
+                        link_is_ok = self.check_link_is_alive(ch['m3u8_link'])
+                        if not link_is_ok: self.log(f"      -> ❌ Link cũ {ch_name} đã CHẾT. Đã loại bỏ.")
+                    else:
+                        for attempt in range(3): 
+                            if not streaming_proxy_ip:
+                                streaming_proxy_ip, streaming_proxy_proto = self._find_proxy_for_streaming(vtv_master_link, banned_streaming_proxies)
+
+                            if not streaming_proxy_ip:
+                                self.log("      ⚠️ Cạn kiệt Proxy Stream! Giữ lại link Fallback để đảm bảo an toàn.")
+                                link_is_ok = True 
+                                break
+
+                            is_alive = self.check_link_is_alive(ch['m3u8_link'], streaming_proxy_ip, streaming_proxy_proto)
+                            if is_alive:
+                                link_is_ok = True
+                                break
+                            else:
+                                proxy_health_check = self.check_link_is_alive(vtv_master_link, streaming_proxy_ip, streaming_proxy_proto)
+                                if proxy_health_check:
+                                    self.log(f"      -> ❌ Link cũ {ch_name} đã CHẾT (Proxy vẫn sống). Đã loại bỏ.")
+                                    link_is_ok = False
+                                    break
+                                else:
+                                    self.log(f"      -> ⚠️ Proxy {streaming_proxy_ip} đã bị Block. Đang vứt bỏ và tìm proxy mới...")
+                                    banned_streaming_proxies.add(streaming_proxy_ip)
+                                    streaming_proxy_ip = None
+
+                    if link_is_ok:
                         m3u_content += extinf_line
                         m3u_content += f"{ch['m3u8_link']}\n"
-                    else:
-                        self.log(f"      -> ❌ Link {ch_name} (từ file M3U cũ) đã chết. Đã loại bỏ.")
                 else:
                     m3u_content += extinf_line
                     m3u_content += f"{ch['m3u8_link']}\n"
