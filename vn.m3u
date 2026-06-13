@@ -29,111 +29,6 @@ https://vtvgolive-ssaimh.vtvdigital.vn/Xhzb_7NK5OUxUzaDYylkRw/1781335069/manifes
 https://vtvgolive-vtvcab.vtvdigital.vn/dS4pHoIWQNP39krtPAJiVA/1781335070/vtvcabvtvgo/ANNINHTV/index.m3u8
 #EXTINF:-1 tvg-id="Truyền hình Quốc phòng Việt Nam" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/logo/QPVN_150x902_1675158863.webp" group-title="Kênh VTV", Truyền hình Quốc phòng Việt Nam
 https://vtvgolive-vtvcab.vtvdigital.vn/71AtuxL_F7pRvw64qteUKQ/1781335073/vtvcabvtvgo/QPTV/index.m3u8
-#EXTINF:-1 tvg-id="SCTV2 Today TV" tvg-logo="https://img.vtvprime.vn/2-NtvNvKve2iVPZxEjQcsXZE_As2Re-izRbLrmGrsUg/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjE3ZWExZWYtYzFhMS00NWY0LTg3MzEtM2Y1ODhkZmE0OTBhLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV2 Today TV
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc4OTgsImlhdCI6MTc4MTMyMDYwNH0.Sn2COR4c_Cw1uKEZEfMIjofLyU3Hh5hEfwf-2-oNgiTVLfOj1jui4QXY1O6TQoCDc4TaiBuF6iaNU1lkSe6C7Q
-https://liveatmvng.vtvprime.vn/live/data8/SCTV2/Live_DASHDRM/SCTV2.mpd
-#EXTINF:-1 tvg-id="SCTV9 Phim Châu Á" tvg-logo="https://img.vtvprime.vn/iJL-nAvJpkrledm-GhoyqtPSGBH1F-mN7RL2BCsm9Qo/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZWU0MTFjMjEtNDdmNy00YjA0LWE1Y2MtOTcwYzBhMDFiYzM5LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV9 Phim Châu Á
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv92025|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djkyMDI1IiwiZXhwIjoxNzgxMzI3OTA2LCJpYXQiOjE3ODEzMjA2MTJ9.OhAW7bOMrmdmEE5-WsKQXvml9n3IjN62B_3DLcdNQb-Owq1jP4BjiXgrZk1nwPDImcDJBIXlWhVVelKfy6Og2A
-https://livebytsct.vtvprime.vn/mean/SCTV9/manifest.mpd
-#EXTINF:-1 tvg-id="SCTV1 Hài" tvg-logo="https://img.vtvprime.vn/PYph2rJ-XMzrNFRf8Hv0wb-XDpm2FzIUDN-84ijmLic/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvODJkMDYzOTQtZmEwYi00MWI3LWIzMTYtOWMwMDNkNDBjNjExLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV1 Hài
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MDgsImlhdCI6MTc4MTMyMDYxNH0.9pY66Ic9klzzO7i-ELCPSB9T47L1B3BwdtvPuQIPv4wZDjEHJGHAMqFhCkWJwFWBTDrkeM6XHWsuC1FrVZKFSA
-https://liveatmvng.vtvprime.vn/live/data8/SCTV1/Live_DASHDRM/SCTV1.mpd
-#EXTINF:-1 tvg-id="SCTV21 Việt Nam Ký Ức" tvg-logo="https://img.vtvprime.vn/RdeNdMbxoQT-YD6ftVkMaASU1ABNvqODYxkdAQrMYEY/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYmI4ZjcyYmItZTM4Mi00ZjU2LTgzMTQtNTlhZTllZDY0NjhjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV21 Việt Nam Ký Ức
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv212026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIxMjAyNiIsImV4cCI6MTc4MTMyNzkxMSwiaWF0IjoxNzgxMzIwNjE3fQ.KQysLODSYAUvz81KXRx92ZIRBrRiL8IhyblN3J8P2Xhe4judsNnw6CwKdwreGPKOkI0qHwIx3ABpJTTJXz9-Xg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV21/Live_DASHDRM/SCTV21.mpd
-#EXTINF:-1 tvg-id="SCTV3 Kênh Thiếu Nhi" tvg-logo="https://img.vtvprime.vn/SFR0K5H7NLTMtagNF5BhyqXEv4y5ek45kew7APgJ0Bw/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvM2I4OTk1YzUtMjI1Mi00ZDcwLWI1ZGMtZTdiZDk2YjBlOGIyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV3 Kênh Thiếu Nhi
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv032026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djAzMjAyNiIsImV4cCI6MTc4MTMyNzkxNCwiaWF0IjoxNzgxMzIwNjIwfQ.qss8bqhc47orPck_SCITYH7vWw-d4zT3ASSoKUa3hgm0HApVtXK5TCYCi1UHNzxrwJRg1aHBAeAonLAy-yTc2w
-https://liveatmvng.vtvprime.vn/live/data8/SCTV3/Live_DASHDRM/SCTV3.mpd
-#EXTINF:-1 tvg-id="SCTV Phim Tổng Hợp" tvg-logo="https://img.vtvprime.vn/cf-cQKJDbIW9958UPPY8xOI8hO8vX_DZFbSv5-4jE1E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvOWU5N2QxMzEtM2Q5ZS00ODVmLWFkNzYtODk5YzkzYjQ0YjM5LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV Phim Tổng Hợp
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MTYsImlhdCI6MTc4MTMyMDYyMn0.A9vLv59VaPUt6F7QCrmSyG0LYuynMKLmqHKxo_o7ILqFKuVO2ieKflzui0IlNawxRpwoynBAmPonP40XNPqYqg
-https://liveatmvng.vtvprime.vn/live/data8/SCTVPHIM/Live_DASHDRM/SCTVPHIM.mpd
-#EXTINF:-1 tvg-id="SCTV4 Let's Việt" tvg-logo="https://img.vtvprime.vn/WMTZXKyigQ-RaYPgvoiNsQ-JmSRcv-r_2r-WJB9sQaM/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNGM4MzMzNWEtZWVkMS00ZDI4LTg5YWYtNThmY2U3NWM2ZDExLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV4 Let's Việt
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MTksImlhdCI6MTc4MTMyMDYyNX0.d0TBhve4jxQQh60y3SZPULdqCdU7KvkqU-jVTGzXVCpQ1vEgY_8hpn8R7DmrAEIS3yG4869V-T3Rp4h0glZavg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV4/Live_DASHDRM/SCTV4.mpd
-#EXTINF:-1 tvg-id="SCTV6 Giải Trí Thế Hệ Mới" tvg-logo="https://img.vtvprime.vn/PJH8961fmQ4n1-_ft_t1NVX9fo0pGguTp6WwIpb147k/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMzkzNzFlNDgtYWQxYy00NTJhLThiMjItNjUyNzZlYTE2OTJlLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV6 Giải Trí Thế Hệ Mới
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjEsImlhdCI6MTc4MTMyMDYyN30.ETvwiBnKKtE00oslHsT5sH1OfNCp1XVv7giS7pJY_6V0Ya28d-nbahk9onzDieNrqE1Pu6mdD8aTk94LJH0-CQ
-https://liveatmvng.vtvprime.vn/live/data8/SCTV6/Live_DASHDRM/SCTV6.mpd
-#EXTINF:-1 tvg-id="SCTV7 Sân Khấu" tvg-logo="https://img.vtvprime.vn/7DdEBmnXEhKFdbrbixhsUGm-f2_qQdT_LAZJ1eTCK4w/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjlhOWYyZTItODAxZi00MWY2LWI4N2MtZjBjNTgzNzgyMmRhLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV7 Sân Khấu
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjQsImlhdCI6MTc4MTMyMDYzMH0.fNrW-2h0s5Hv8mXiUxSK8p9tXwuZuroO5Hyt5uNK3OUr4XzAYQ4cvjfCSWE5scF5m6C_x1Ud209tqvradB61qQ
-https://liveatmvng.vtvprime.vn/live/data8/SCTV7/Live_DASHDRM/SCTV7.mpd
-#EXTINF:-1 tvg-id="SCTV8 Kinh Tế Thị Trường" tvg-logo="https://img.vtvprime.vn/18HDa6ZsHK3OfmnSB8o8bfL3t6-BLtVjXCpN-nCfx5k/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYWRlZTMxMDAtNmU0Yy00NmNlLTliODItZjQwMTgzNWJkY2VjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV8 Kinh Tế Thị Trường
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjcsImlhdCI6MTc4MTMyMDYzM30.3r4TFkpNKPgo4-Y04g_Q185ytfDOz2YrUWJvmSdfV860sUIc5nFZgRx-xRj-LuI8a3u0OWCTO_1Ef3cqguymeQ
-https://liveatmvng.vtvprime.vn/live/data8/SCTV8/Live_DASHDRM/SCTV8.mpd
-#EXTINF:-1 tvg-id="SCTV11 TV Star" tvg-logo="https://img.vtvprime.vn/eWaND4ssKhduh3y8xyVnH7HU6rpSMq7YtmP8GMOgA-E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjRmNDYwNzgtZjcxNy00N2U3LTk3ZjUtYTBlYjkyNGRmYTZmLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV11 TV Star
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjksImlhdCI6MTc4MTMyMDYzNX0.3RruPMG7ETLwiXdfo6MD5qrSzRhdE0BQqqwD3RF3_zJwvKiurgPOKSqKK89L1VniPeiWGeKM50z1HAgD50gBbA
-https://liveatmvng.vtvprime.vn/live/data8/SCTV11/Live_DASHDRM/SCTV11.mpd
-#EXTINF:-1 tvg-id="SCTV12 Du Lịch Khám Phá" tvg-logo="https://img.vtvprime.vn/jYKJvoPERv5Gx9AWhslxlbdc4rzM2ICyqyChjz3ipi0/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYjM0MmI2NGYtNDkxNC00NDFlLTk3YTEtZGJlMmE2ZGIxZDJmLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV12 Du Lịch Khám Phá
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzIsImlhdCI6MTc4MTMyMDYzOH0.X182lu-1vQd0r7UuqRTEc5-sgfQbSJngXhtnd-fU_FSbTQtlj65QXSr2j4u_3YTuvG-2lqoZFNJWD2skPE6Qtg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV12/Live_DASHDRM/SCTV12.mpd
-#EXTINF:-1 tvg-id="SCTV13 Phụ Nữ & Gia Đình" tvg-logo="https://img.vtvprime.vn/sQYYqzXYklvp6qVgetV_H5iougYm0Y6WL7Rgq4sCPNw/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZTRlNWVlNmItZWQyNi00NjNmLWJkM2MtYWIxZmVjOWY1Y2FjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV13 Phụ Nữ & Gia Đình
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzQsImlhdCI6MTc4MTMyMDY0MH0.oEGrbo58oWsVN37FLPDwukWxgmDathYofd_xUXRA1BW6h32UFKQEnVlxiPfC6YdtVrGaPXDI4VzF5tGrnykMPg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV13/Live_DASHDRM/SCTV13.mpd
-#EXTINF:-1 tvg-id="SCTV14 Phim Việt Nam" tvg-logo="https://img.vtvprime.vn/Hr1euLmLVypl_nHZQ6xNme8bt-5nDwU24prbiWnCESI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNWJkY2M3MGUtY2VjMy00NWE4LTg5M2MtMWI2NDViZGY4MmM3LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV14 Phim Việt Nam
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzcsImlhdCI6MTc4MTMyMDY0M30.JzY2ewpeTfLntaBWij_LI3rRXTLRd6VhiBYSYX1JgzMvyRpzshrooKZLfJeJq3iGnl832e1RQ5T7giFtEbEn0w
-https://liveatmvng.vtvprime.vn/live/data8/SCTV14/Live_DASHDRM/SCTV14.mpd
-#EXTINF:-1 tvg-id="SCTV15 Thể Thao" tvg-logo="https://img.vtvprime.vn/2aHpjGXD44gTLqUNPbTvKpwYoO7SSGK608WqH9YD5jU/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZjBhNjlkNTItODA0Yy00YzQzLTllMGQtNDFlYzdiNWE4ODMyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV15 Thể Thao
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDAsImlhdCI6MTc4MTMyMDY0Nn0.1BIY8CSTq9ikmrQbj9OaHP3C_oajv7WiegkR97UlC02rRD4TkBbWfhUVjIFuz4t33t0i4U4kETA1KZT8YKJBfw
-https://liveatmvng.vtvprime.vn/live/data8/SCTV15HD/Live_DASHDRM/SCTV15HD.mpd
-#EXTINF:-1 tvg-id="SCTV16 Phim Nước Ngoài" tvg-logo="https://img.vtvprime.vn/HF8Odbai0ixX4FPA8KqCaLs1VOA4ohXFeEchMnmZC1Q/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNjQxNTVkMjctY2Y1ZC00ZjgyLTlmNTktNzMwMTQ5M2ZjOGIyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV16 Phim Nước Ngoài
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDIsImlhdCI6MTc4MTMyMDY0OH0.nFxi1dHBBDha7D60sA0syt9y3Y-oc0S_vvjwji00291qnmOcZRucx36sQrYdQ14whPfpDdmolJeRETST1cfPrw
-https://liveatmvng.vtvprime.vn/live/data8/SCTV16/Live_DASHDRM/SCTV16.mpd
-#EXTINF:-1 tvg-id="SCTV17 Thể Thao & CS" tvg-logo="https://img.vtvprime.vn/8fpfcS-6YDwMwZT8ej5U_ll9yYJvt1mZaCeSBmi5jnI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNDQ5ODA4NWQtYmUwNC00NDFiLWI2NDYtM2JlMTJkZjBlNGRjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV17 Thể Thao & CS
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDUsImlhdCI6MTc4MTMyMDY1MX0.0UboS3EiU1TCjaxHeFNp3M0fA63E6FIJF2jRouBQaQW9XaVgXdpx95fQaXqWGoccWtzdCpE_xPDSd1LtQ_zOkA
-https://liveatmvng.vtvprime.vn/live/data8/SCTV17/Live_DASHDRM/SCTV17.mpd
-#EXTINF:-1 tvg-id="SCTV 18" tvg-logo="https://img.vtvprime.vn/lwCZ6Ou47DmElCmpM04jou1kewLPYbkxxBdB_OUy1PI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNWRlNmQyYWQtODY1ZC00MzlmLWEyYzUtNDIwYjI5ZWU4Nzk1LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV 18
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv182026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djE4MjAyNiIsImV4cCI6MTc4MTMyNzk0OCwiaWF0IjoxNzgxMzIwNjU0fQ.T2uV6uwY5rtmql9gytt7CYaNB87GSoTQQ8f7hnJ7BD3gTaB9wqgSBxK2_WgkY1Jh-Cc6ZLBHLPBJew5I0CrxSg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV18/Live_DASHDRM/SCTV18.mpd
-#EXTINF:-1 tvg-id="SCTV19 Kênh Thiếu Niên" tvg-logo="https://img.vtvprime.vn/rbOtod5QlKx3ZR49QDRYmpsylprUp-QhV7eE8bm8sXA/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMTJmZGY1N2ItY2FhYi00NzkwLTk5ZDgtYmVjZWMwOTdhMzgwLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV19 Kênh Thiếu Niên
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv192026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djE5MjAyNiIsImV4cCI6MTc4MTMyNzk1MCwiaWF0IjoxNzgxMzIwNjU2fQ.OdZi1-BBZ7GuhGKLe3kIaYug_fy4mLGi2-9ufRfDtQfAXqQk4nVPa7dME96eHUlfmAefDnx914dUhIzXvWs9xw
-https://liveatmvng.vtvprime.vn/live/data8/SCTV19/Live_DASHDRM/SCTV19.mpd
-#EXTINF:-1 tvg-id="SCTV20 Kênh Ca nhạc" tvg-logo="https://img.vtvprime.vn/KjBSuEOs9GW5Y_2vOHKbyXkk4iwEqW6Kn7CgFhyTmQ8/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYzNlZTRlMTYtM2I0MC00MTdjLTlkOWUtZWI3OWQzYTY5MjgzLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV20 Kênh Ca nhạc
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv202026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjAyNiIsImV4cCI6MTc4MTMyNzk1MiwiaWF0IjoxNzgxMzIwNjU4fQ.eh_4kyZoxo9OZW8O2B9HhUHTgWk5jl0Rnl2BouLVHRuGHavGZ-94SyQ_3TgAGyDLXdAmiaHjPYJBVFqpf_6OBA
-https://liveatmvng.vtvprime.vn/live/data8/SCTV20/Live_DASHDRM/SCTV20.mpd
-#EXTINF:-1 tvg-id="SCTV22 Kênh Thể Thao" tvg-logo="https://img.vtvprime.vn/8EDc4aHKZhga3-JQ72NQf06cwtefrcE_jgxUPiKUA_E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjk2OTYyYTktOWIwNy00YThmLWE5ZWUtYzY0NmY4YWI2M2Y1LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV22 Kênh Thể Thao
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv222026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIyMjAyNiIsImV4cCI6MTc4MTMyNzk1NSwiaWF0IjoxNzgxMzIwNjYxfQ.kbLhEFCVZYhDWgci-PFuIbrKW6AX1RzXnxgphPATeGblWQYiC1qNVa9Qzigih6DdrmOYgS500ffA7Q6Zbz4-gQ
-https://liveatmvng.vtvprime.vn/live/data8/SCTV22/Live_DASHDRM/SCTV22.mpd
 #EXTINF:-1 tvg-id="VTVcab 1 - Vie Giải Trí HD" tvg-logo="https://img-zlr1.tv360.vn/image1/2024/01/02/23/1704211446236/d1503bd3566e_480_270.png" group-title="Kênh VTV Cab", VTVcab 1 - Vie Giải Trí HD
 https://fo-hlc.tv360.vn/bpk-tv/211/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODEzNDI1MTEsInVyaSI6Ii9icGstdHYvMjExL291dHB1dC9pbmRleC5tM3U4In0.bV2xTQb1Du2DqZs6WmA-CecxS4A2iNoGR8FGyLQnTn8&minrate=0&maxrate=10000000&uid=116.98.242.204
 #EXTINF:-1 tvg-id="VTVcab 2 - Phim Việt HD" tvg-logo="https://img-zlr1.tv360.vn/image1/2021/09/07/16/1631007494845/516efb158133_480_270.png" group-title="Kênh VTV Cab", VTVcab 2 - Phim Việt HD
@@ -310,3 +205,108 @@ https://vtvgolive-ssaimh.vtvdigital.vn/tTNFgm_FUYxgqp3jqJJ97g/1781145049/manifes
 https://vtvgolive-ssaimh.vtvdigital.vn/tTNFgm_FUYxgqp3jqJJ97g/1781145049/manifest/sctv20/master.m3u8
 #EXTINF:-1 tvg-id="SCTV22" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/channel/20260501/2026050108/nD3w1PLolJ-SCTV22-LOGO-KENHVTVgo-150x90.webp" group-title="Kênh SCTV", SCTV22
 https://vtvgolive-ssaimh.vtvdigital.vn/tTNFgm_FUYxgqp3jqJJ97g/1781145049/manifest/sctv22/master.m3u8
+#EXTINF:-1 tvg-id="SCTV2 Today TV" tvg-logo="https://img.vtvprime.vn/2-NtvNvKve2iVPZxEjQcsXZE_As2Re-izRbLrmGrsUg/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjE3ZWExZWYtYzFhMS00NWY0LTg3MzEtM2Y1ODhkZmE0OTBhLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV2 Today TV
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc4OTgsImlhdCI6MTc4MTMyMDYwNH0.Sn2COR4c_Cw1uKEZEfMIjofLyU3Hh5hEfwf-2-oNgiTVLfOj1jui4QXY1O6TQoCDc4TaiBuF6iaNU1lkSe6C7Q
+https://liveatmvng.vtvprime.vn/live/data8/SCTV2/Live_DASHDRM/SCTV2.mpd
+#EXTINF:-1 tvg-id="SCTV9 Phim Châu Á" tvg-logo="https://img.vtvprime.vn/iJL-nAvJpkrledm-GhoyqtPSGBH1F-mN7RL2BCsm9Qo/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZWU0MTFjMjEtNDdmNy00YjA0LWE1Y2MtOTcwYzBhMDFiYzM5LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV9 Phim Châu Á
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv92025|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djkyMDI1IiwiZXhwIjoxNzgxMzI3OTA2LCJpYXQiOjE3ODEzMjA2MTJ9.OhAW7bOMrmdmEE5-WsKQXvml9n3IjN62B_3DLcdNQb-Owq1jP4BjiXgrZk1nwPDImcDJBIXlWhVVelKfy6Og2A
+https://livebytsct.vtvprime.vn/mean/SCTV9/manifest.mpd
+#EXTINF:-1 tvg-id="SCTV1 Hài" tvg-logo="https://img.vtvprime.vn/PYph2rJ-XMzrNFRf8Hv0wb-XDpm2FzIUDN-84ijmLic/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvODJkMDYzOTQtZmEwYi00MWI3LWIzMTYtOWMwMDNkNDBjNjExLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV1 Hài
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MDgsImlhdCI6MTc4MTMyMDYxNH0.9pY66Ic9klzzO7i-ELCPSB9T47L1B3BwdtvPuQIPv4wZDjEHJGHAMqFhCkWJwFWBTDrkeM6XHWsuC1FrVZKFSA
+https://liveatmvng.vtvprime.vn/live/data8/SCTV1/Live_DASHDRM/SCTV1.mpd
+#EXTINF:-1 tvg-id="SCTV21 Việt Nam Ký Ức" tvg-logo="https://img.vtvprime.vn/RdeNdMbxoQT-YD6ftVkMaASU1ABNvqODYxkdAQrMYEY/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYmI4ZjcyYmItZTM4Mi00ZjU2LTgzMTQtNTlhZTllZDY0NjhjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV21 Việt Nam Ký Ức
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv212026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIxMjAyNiIsImV4cCI6MTc4MTMyNzkxMSwiaWF0IjoxNzgxMzIwNjE3fQ.KQysLODSYAUvz81KXRx92ZIRBrRiL8IhyblN3J8P2Xhe4judsNnw6CwKdwreGPKOkI0qHwIx3ABpJTTJXz9-Xg
+https://liveatmvng.vtvprime.vn/live/data8/SCTV21/Live_DASHDRM/SCTV21.mpd
+#EXTINF:-1 tvg-id="SCTV3 Kênh Thiếu Nhi" tvg-logo="https://img.vtvprime.vn/SFR0K5H7NLTMtagNF5BhyqXEv4y5ek45kew7APgJ0Bw/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvM2I4OTk1YzUtMjI1Mi00ZDcwLWI1ZGMtZTdiZDk2YjBlOGIyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV3 Kênh Thiếu Nhi
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv032026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djAzMjAyNiIsImV4cCI6MTc4MTMyNzkxNCwiaWF0IjoxNzgxMzIwNjIwfQ.qss8bqhc47orPck_SCITYH7vWw-d4zT3ASSoKUa3hgm0HApVtXK5TCYCi1UHNzxrwJRg1aHBAeAonLAy-yTc2w
+https://liveatmvng.vtvprime.vn/live/data8/SCTV3/Live_DASHDRM/SCTV3.mpd
+#EXTINF:-1 tvg-id="SCTV Phim Tổng Hợp" tvg-logo="https://img.vtvprime.vn/cf-cQKJDbIW9958UPPY8xOI8hO8vX_DZFbSv5-4jE1E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvOWU5N2QxMzEtM2Q5ZS00ODVmLWFkNzYtODk5YzkzYjQ0YjM5LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV Phim Tổng Hợp
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MTYsImlhdCI6MTc4MTMyMDYyMn0.A9vLv59VaPUt6F7QCrmSyG0LYuynMKLmqHKxo_o7ILqFKuVO2ieKflzui0IlNawxRpwoynBAmPonP40XNPqYqg
+https://liveatmvng.vtvprime.vn/live/data8/SCTVPHIM/Live_DASHDRM/SCTVPHIM.mpd
+#EXTINF:-1 tvg-id="SCTV4 Let's Việt" tvg-logo="https://img.vtvprime.vn/WMTZXKyigQ-RaYPgvoiNsQ-JmSRcv-r_2r-WJB9sQaM/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNGM4MzMzNWEtZWVkMS00ZDI4LTg5YWYtNThmY2U3NWM2ZDExLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV4 Let's Việt
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MTksImlhdCI6MTc4MTMyMDYyNX0.d0TBhve4jxQQh60y3SZPULdqCdU7KvkqU-jVTGzXVCpQ1vEgY_8hpn8R7DmrAEIS3yG4869V-T3Rp4h0glZavg
+https://liveatmvng.vtvprime.vn/live/data8/SCTV4/Live_DASHDRM/SCTV4.mpd
+#EXTINF:-1 tvg-id="SCTV6 Giải Trí Thế Hệ Mới" tvg-logo="https://img.vtvprime.vn/PJH8961fmQ4n1-_ft_t1NVX9fo0pGguTp6WwIpb147k/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMzkzNzFlNDgtYWQxYy00NTJhLThiMjItNjUyNzZlYTE2OTJlLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV6 Giải Trí Thế Hệ Mới
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjEsImlhdCI6MTc4MTMyMDYyN30.ETvwiBnKKtE00oslHsT5sH1OfNCp1XVv7giS7pJY_6V0Ya28d-nbahk9onzDieNrqE1Pu6mdD8aTk94LJH0-CQ
+https://liveatmvng.vtvprime.vn/live/data8/SCTV6/Live_DASHDRM/SCTV6.mpd
+#EXTINF:-1 tvg-id="SCTV7 Sân Khấu" tvg-logo="https://img.vtvprime.vn/7DdEBmnXEhKFdbrbixhsUGm-f2_qQdT_LAZJ1eTCK4w/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjlhOWYyZTItODAxZi00MWY2LWI4N2MtZjBjNTgzNzgyMmRhLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV7 Sân Khấu
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjQsImlhdCI6MTc4MTMyMDYzMH0.fNrW-2h0s5Hv8mXiUxSK8p9tXwuZuroO5Hyt5uNK3OUr4XzAYQ4cvjfCSWE5scF5m6C_x1Ud209tqvradB61qQ
+https://liveatmvng.vtvprime.vn/live/data8/SCTV7/Live_DASHDRM/SCTV7.mpd
+#EXTINF:-1 tvg-id="SCTV8 Kinh Tế Thị Trường" tvg-logo="https://img.vtvprime.vn/18HDa6ZsHK3OfmnSB8o8bfL3t6-BLtVjXCpN-nCfx5k/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYWRlZTMxMDAtNmU0Yy00NmNlLTliODItZjQwMTgzNWJkY2VjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV8 Kinh Tế Thị Trường
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjcsImlhdCI6MTc4MTMyMDYzM30.3r4TFkpNKPgo4-Y04g_Q185ytfDOz2YrUWJvmSdfV860sUIc5nFZgRx-xRj-LuI8a3u0OWCTO_1Ef3cqguymeQ
+https://liveatmvng.vtvprime.vn/live/data8/SCTV8/Live_DASHDRM/SCTV8.mpd
+#EXTINF:-1 tvg-id="SCTV11 TV Star" tvg-logo="https://img.vtvprime.vn/eWaND4ssKhduh3y8xyVnH7HU6rpSMq7YtmP8GMOgA-E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjRmNDYwNzgtZjcxNy00N2U3LTk3ZjUtYTBlYjkyNGRmYTZmLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV11 TV Star
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MjksImlhdCI6MTc4MTMyMDYzNX0.3RruPMG7ETLwiXdfo6MD5qrSzRhdE0BQqqwD3RF3_zJwvKiurgPOKSqKK89L1VniPeiWGeKM50z1HAgD50gBbA
+https://liveatmvng.vtvprime.vn/live/data8/SCTV11/Live_DASHDRM/SCTV11.mpd
+#EXTINF:-1 tvg-id="SCTV12 Du Lịch Khám Phá" tvg-logo="https://img.vtvprime.vn/jYKJvoPERv5Gx9AWhslxlbdc4rzM2ICyqyChjz3ipi0/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYjM0MmI2NGYtNDkxNC00NDFlLTk3YTEtZGJlMmE2ZGIxZDJmLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV12 Du Lịch Khám Phá
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzIsImlhdCI6MTc4MTMyMDYzOH0.X182lu-1vQd0r7UuqRTEc5-sgfQbSJngXhtnd-fU_FSbTQtlj65QXSr2j4u_3YTuvG-2lqoZFNJWD2skPE6Qtg
+https://liveatmvng.vtvprime.vn/live/data8/SCTV12/Live_DASHDRM/SCTV12.mpd
+#EXTINF:-1 tvg-id="SCTV13 Phụ Nữ & Gia Đình" tvg-logo="https://img.vtvprime.vn/sQYYqzXYklvp6qVgetV_H5iougYm0Y6WL7Rgq4sCPNw/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZTRlNWVlNmItZWQyNi00NjNmLWJkM2MtYWIxZmVjOWY1Y2FjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV13 Phụ Nữ & Gia Đình
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzQsImlhdCI6MTc4MTMyMDY0MH0.oEGrbo58oWsVN37FLPDwukWxgmDathYofd_xUXRA1BW6h32UFKQEnVlxiPfC6YdtVrGaPXDI4VzF5tGrnykMPg
+https://liveatmvng.vtvprime.vn/live/data8/SCTV13/Live_DASHDRM/SCTV13.mpd
+#EXTINF:-1 tvg-id="SCTV14 Phim Việt Nam" tvg-logo="https://img.vtvprime.vn/Hr1euLmLVypl_nHZQ6xNme8bt-5nDwU24prbiWnCESI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNWJkY2M3MGUtY2VjMy00NWE4LTg5M2MtMWI2NDViZGY4MmM3LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV14 Phim Việt Nam
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5MzcsImlhdCI6MTc4MTMyMDY0M30.JzY2ewpeTfLntaBWij_LI3rRXTLRd6VhiBYSYX1JgzMvyRpzshrooKZLfJeJq3iGnl832e1RQ5T7giFtEbEn0w
+https://liveatmvng.vtvprime.vn/live/data8/SCTV14/Live_DASHDRM/SCTV14.mpd
+#EXTINF:-1 tvg-id="SCTV15 Thể Thao" tvg-logo="https://img.vtvprime.vn/2aHpjGXD44gTLqUNPbTvKpwYoO7SSGK608WqH9YD5jU/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvZjBhNjlkNTItODA0Yy00YzQzLTllMGQtNDFlYzdiNWE4ODMyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV15 Thể Thao
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDAsImlhdCI6MTc4MTMyMDY0Nn0.1BIY8CSTq9ikmrQbj9OaHP3C_oajv7WiegkR97UlC02rRD4TkBbWfhUVjIFuz4t33t0i4U4kETA1KZT8YKJBfw
+https://liveatmvng.vtvprime.vn/live/data8/SCTV15HD/Live_DASHDRM/SCTV15HD.mpd
+#EXTINF:-1 tvg-id="SCTV16 Phim Nước Ngoài" tvg-logo="https://img.vtvprime.vn/HF8Odbai0ixX4FPA8KqCaLs1VOA4ohXFeEchMnmZC1Q/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNjQxNTVkMjctY2Y1ZC00ZjgyLTlmNTktNzMwMTQ5M2ZjOGIyLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV16 Phim Nước Ngoài
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDIsImlhdCI6MTc4MTMyMDY0OH0.nFxi1dHBBDha7D60sA0syt9y3Y-oc0S_vvjwji00291qnmOcZRucx36sQrYdQ14whPfpDdmolJeRETST1cfPrw
+https://liveatmvng.vtvprime.vn/live/data8/SCTV16/Live_DASHDRM/SCTV16.mpd
+#EXTINF:-1 tvg-id="SCTV17 Thể Thao & CS" tvg-logo="https://img.vtvprime.vn/8fpfcS-6YDwMwZT8ej5U_ll9yYJvt1mZaCeSBmi5jnI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNDQ5ODA4NWQtYmUwNC00NDFiLWI2NDYtM2JlMTJkZjBlNGRjLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV17 Thể Thao & CS
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjc5NDUsImlhdCI6MTc4MTMyMDY1MX0.0UboS3EiU1TCjaxHeFNp3M0fA63E6FIJF2jRouBQaQW9XaVgXdpx95fQaXqWGoccWtzdCpE_xPDSd1LtQ_zOkA
+https://liveatmvng.vtvprime.vn/live/data8/SCTV17/Live_DASHDRM/SCTV17.mpd
+#EXTINF:-1 tvg-id="SCTV 18" tvg-logo="https://img.vtvprime.vn/lwCZ6Ou47DmElCmpM04jou1kewLPYbkxxBdB_OUy1PI/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvNWRlNmQyYWQtODY1ZC00MzlmLWEyYzUtNDIwYjI5ZWU4Nzk1LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV 18
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv182026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djE4MjAyNiIsImV4cCI6MTc4MTMyNzk0OCwiaWF0IjoxNzgxMzIwNjU0fQ.T2uV6uwY5rtmql9gytt7CYaNB87GSoTQQ8f7hnJ7BD3gTaB9wqgSBxK2_WgkY1Jh-Cc6ZLBHLPBJew5I0CrxSg
+https://liveatmvng.vtvprime.vn/live/data8/SCTV18/Live_DASHDRM/SCTV18.mpd
+#EXTINF:-1 tvg-id="SCTV19 Kênh Thiếu Niên" tvg-logo="https://img.vtvprime.vn/rbOtod5QlKx3ZR49QDRYmpsylprUp-QhV7eE8bm8sXA/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMTJmZGY1N2ItY2FhYi00NzkwLTk5ZDgtYmVjZWMwOTdhMzgwLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV19 Kênh Thiếu Niên
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv192026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djE5MjAyNiIsImV4cCI6MTc4MTMyNzk1MCwiaWF0IjoxNzgxMzIwNjU2fQ.OdZi1-BBZ7GuhGKLe3kIaYug_fy4mLGi2-9ufRfDtQfAXqQk4nVPa7dME96eHUlfmAefDnx914dUhIzXvWs9xw
+https://liveatmvng.vtvprime.vn/live/data8/SCTV19/Live_DASHDRM/SCTV19.mpd
+#EXTINF:-1 tvg-id="SCTV20 Kênh Ca nhạc" tvg-logo="https://img.vtvprime.vn/KjBSuEOs9GW5Y_2vOHKbyXkk4iwEqW6Kn7CgFhyTmQ8/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvYzNlZTRlMTYtM2I0MC00MTdjLTlkOWUtZWI3OWQzYTY5MjgzLnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV20 Kênh Ca nhạc
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv202026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjAyNiIsImV4cCI6MTc4MTMyNzk1MiwiaWF0IjoxNzgxMzIwNjU4fQ.eh_4kyZoxo9OZW8O2B9HhUHTgWk5jl0Rnl2BouLVHRuGHavGZ-94SyQ_3TgAGyDLXdAmiaHjPYJBVFqpf_6OBA
+https://liveatmvng.vtvprime.vn/live/data8/SCTV20/Live_DASHDRM/SCTV20.mpd
+#EXTINF:-1 tvg-id="SCTV22 Kênh Thể Thao" tvg-logo="https://img.vtvprime.vn/8EDc4aHKZhga3-JQ72NQf06cwtefrcE_jgxUPiKUA_E/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjk2OTYyYTktOWIwNy00YThmLWE5ZWUtYzY0NmY4YWI2M2Y1LnBuZw==.png" group-title="SCTV (VTV Prime)", SCTV22 Kênh Thể Thao
+#KODIPROP:inputstream.adaptive.manifest_type=mpd
+#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
+#KODIPROP:inputstream.adaptive.license_key=WORKER_DRM_PROXY_URL?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv222026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIyMjAyNiIsImV4cCI6MTc4MTMyNzk1NSwiaWF0IjoxNzgxMzIwNjYxfQ.kbLhEFCVZYhDWgci-PFuIbrKW6AX1RzXnxgphPATeGblWQYiC1qNVa9Qzigih6DdrmOYgS500ffA7Q6Zbz4-gQ
+https://liveatmvng.vtvprime.vn/live/data8/SCTV22/Live_DASHDRM/SCTV22.mpd
