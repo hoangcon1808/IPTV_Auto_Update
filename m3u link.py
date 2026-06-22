@@ -500,6 +500,12 @@ class AllInOneIPTVTool:
 
     def get_vtv_acronym(self, ch_name):
         clean_name = self.remove_accents(ch_name).lower().replace('-', ' ')
+        
+        # --- NGOẠI LỆ ĐẶC BIỆT ---
+        # Kênh Vietnam Today cấu trúc link ghi liền toàn bộ chữ thay vì viết tắt
+        if "vietnam today" in clean_name or "viet nam today" in clean_name:
+            return "vietnamtoday"
+            
         words = clean_name.split()
         if not words: return ""
         res = words[0] 
