@@ -1,6 +1,0 @@
-#EXTM3U
-#EXTINF:-1 tvg-id="SCTV2" tvg-logo="https://img.vtvprime.vn/2-NtvNvKve2iVPZxEjQcsXZE_As2Re-izRbLrmGrsUg/rs:fit:836:468/czM6Ly9wcmQtc24taW1hZ2VzL2NoYW5uZWwvMjE3ZWExZWYtYzFhMS00NWY0LTg3MzEtM2Y1ODhkZmE0OTBhLnBuZw==.png" group-title="Test Kênh SCTV", SCTV2
-#KODIPROP:inputstream.adaptive.manifest_type=mpd
-#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha
-#KODIPROP:inputstream.adaptive.license_key=https://m3u.thangbeteo1.workers.dev/drm-proxy?url=https://vtvcab.ondrm.vn/license-api/v1/drm/licenses/widevine?content_id=sctv2026|Token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6IlZUVnByaW1lIiwiYXBwX3VzZXJfaWQiOiI4ZGYzMDgyNS1mMjJkLTRmNTgtODllMC1mNWNkOGU4MTk5ZGEiLCJjb250ZW50X2lkIjoic2N0djIwMjYiLCJleHAiOjE3ODEzMjYxNjgsImlhdCI6MTc4MTMxODg3NH0.fjt8L0hTunlB06JtJ0_2a4CEP3zzn08HSIp856GVTHUy9LM0XWMROJU6efE5ReZKg_hC2tElJuetrTAfNHxywg
-https://liveatmvng.vtvprime.vn/live/data8/SCTV2/Live_DASHDRM/SCTV2.mpd
