@@ -499,12 +499,15 @@ class AllInOneIPTVTool:
         return s
 
     def get_vtv_acronym(self, ch_name):
-        clean_name = self.remove_accents(ch_name).lower()
+        clean_name = self.remove_accents(ch_name).lower().replace('-', ' ')
         words = clean_name.split()
         if not words: return ""
         res = words[0] 
         for w in words[1:]:
-            if w: res += w[0] 
+            if w.isdigit():
+                res += w # Giữ nguyên số (VD: SCTV 14 -> sctv14)
+            else:
+                res += w[0] # Lấy chữ cái đầu của chữ (VD: Cần Thơ -> ct)
         return res
         
     def create_slug(self, ch_name):
@@ -1117,64 +1120,68 @@ class AllInOneIPTVTool:
             if ch['source'] == 'vtvgo_static':
                 if not vtv_master_link: continue
                 
-                if 'vtv' in group_name.lower() and 'sctv' not in group_name.lower():
-                    if ch_id == "13": folder_id = "vtv6tt"
-                    elif not ch_id.isdigit(): folder_id = ch_id
+                folder_id = self.get_vtv_acronym(ch_name)
+                is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
+                
+                if is_sctv:
+                    # BƯỚC 1: Rút trích mã Token (chữ số ngẫu nhiên) từ link gốc VTV1
+                    # Nó sẽ tìm kiếm cấu trúc như ".vn/vOLCHx.../1782147693/"
+                    token_match = re.search(r'\.vn/([^/]+/[^/]+)/', vtv_master_link)
+                    if token_match:
+                        tokens = token_match.group(1)
+                        # BƯỚC 2: Ráp Token đó vào link domain của SCTV
+                        new_link = f"https://vtvgolive-sctvdrm.vtvdigital.vn/{tokens}/manifest/{folder_id}/master.m3u8"
                     else:
-                        num = int(ch_id)
-                        if num <= 6: folder_id = f"vtv{num}"
-                        else: folder_id = self.get_vtv_acronym(ch_name)
-                    
-                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
-                    m3u_content += extinf_line
-                    m3u_content += f"{new_link}\n"
+                        # Fallback dự phòng nếu lỗi biểu thức Regex
+                        new_link = re.sub(r'(/manifest/|/live/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
                 else:
-                    new_link = re.sub(r'(/manifest/)[^/]+(/)', f'\\g<1>{ch_id}\\g<2>', vtv_master_link)
+                    # Đối với VTV và các kênh khác, cắt ghép link VTV1 đè folder như bình thường
+                    new_link = re.sub(r'(/manifest/|/live/)[^/]+(/)', f'\\g<1>{folder_id}\\g<2>', vtv_master_link)
+                
+                # LOGIC MỚI: Kiểm tra nội suy bằng thuật toán xoay vòng Proxy (CHỈ DÀNH CHO SCTV)
+                if is_sctv:
+                    self.log(f"   [Kiểm tra SCTV Nội suy] Đang test kênh {ch_name}...")
+                    link_is_ok = False
                     
-                    # LOGIC MỚI: Kiểm tra nội suy bằng thuật toán xoay vòng Proxy
-                    is_sctv = 'sctv' in group_name.lower() or 'sctv' in ch_name.lower()
-                    if is_sctv:
-                        self.log(f"   [Kiểm tra SCTV Nội suy] Đang test kênh {ch_name}...")
-                        link_is_ok = False
-                        
-                        if not USE_AUTO_VN_PROXY:
-                            # Máy chạy tại VN thì cứ ping trực tiếp
-                            link_is_ok = self.check_link_is_alive(new_link)
-                            if not link_is_ok: self.log(f"      -> ❌ Link {ch_name} trả về HTTP Lỗi (Đã chết). Đã loại bỏ.")
-                        else:
-                            # Chạy trên Github Actions: Dùng proxy xoay vòng để ping
-                            for attempt in range(3): # Cho phép xoay tối đa 3 proxy mỗi kênh
-                                if not streaming_proxy_ip:
-                                    streaming_proxy_ip, streaming_proxy_proto = self._find_proxy_for_streaming(vtv_master_link, banned_streaming_proxies)
+                    if not USE_AUTO_VN_PROXY:
+                        # Máy chạy tại VN thì cứ ping trực tiếp
+                        link_is_ok = self.check_link_is_alive(new_link)
+                        if not link_is_ok: self.log(f"      -> ❌ Link {ch_name} trả về HTTP Lỗi (Đã chết). Đã loại bỏ.")
+                    else:
+                        # Chạy trên Github Actions: Dùng proxy xoay vòng để ping
+                        for attempt in range(3): # Cho phép xoay tối đa 3 proxy mỗi kênh
+                            if not streaming_proxy_ip:
+                                streaming_proxy_ip, streaming_proxy_proto = self._find_proxy_for_streaming(vtv_master_link, banned_streaming_proxies)
 
-                                if not streaming_proxy_ip:
-                                    self.log("      ⚠️ Đã cạn kiệt toàn bộ Proxy Stream! Để an toàn, TOOL SẼ GIỮ LẠI LINK này thay vì xoá bỏ.")
-                                    link_is_ok = True 
-                                    break
+                            if not streaming_proxy_ip:
+                                self.log("      ⚠️ Đã cạn kiệt toàn bộ Proxy Stream! Để an toàn, TOOL SẼ GIỮ LẠI LINK này thay vì xoá bỏ.")
+                                link_is_ok = True 
+                                break
 
-                                # Tiến hành ping link SCTV bằng Proxy hiện tại
-                                is_alive = self.check_link_is_alive(new_link, streaming_proxy_ip, streaming_proxy_proto)
-                                if is_alive:
-                                    link_is_ok = True
+                            # Tiến hành ping link SCTV bằng Proxy hiện tại
+                            is_alive = self.check_link_is_alive(new_link, streaming_proxy_ip, streaming_proxy_proto)
+                            if is_alive:
+                                link_is_ok = True
+                                break
+                            else:
+                                # Kênh SCTV ping hỏng -> Phải kiểm tra chéo xem do Kênh chết hay Proxy chết
+                                proxy_health_check = self.check_link_is_alive(vtv_master_link, streaming_proxy_ip, streaming_proxy_proto)
+                                if proxy_health_check:
+                                    self.log(f"      -> ❌ Link {ch_name} thực sự đã CHẾT (Bởi vì proxy vẫn đang sống). Đã loại bỏ.")
+                                    link_is_ok = False
                                     break
                                 else:
-                                    # Kênh SCTV ping hỏng -> Phải kiểm tra chéo xem do Kênh chết hay Proxy chết
-                                    proxy_health_check = self.check_link_is_alive(vtv_master_link, streaming_proxy_ip, streaming_proxy_proto)
-                                    if proxy_health_check:
-                                        self.log(f"      -> ❌ Link {ch_name} thực sự đã CHẾT (Bởi vì proxy vẫn đang sống). Đã loại bỏ.")
-                                        link_is_ok = False
-                                        break
-                                    else:
-                                        self.log(f"      -> ⚠️ Proxy {streaming_proxy_ip} đã bị Block. Đang vứt bỏ và tìm proxy mới...")
-                                        banned_streaming_proxies.add(streaming_proxy_ip)
-                                        streaming_proxy_ip = None
+                                    self.log(f"      -> ⚠️ Proxy {streaming_proxy_ip} đã bị Block. Đang vứt bỏ và tìm proxy mới...")
+                                    banned_streaming_proxies.add(streaming_proxy_ip)
+                                    streaming_proxy_ip = None
 
-                        if link_is_ok:
-                            m3u_content += extinf_line
-                            m3u_content += f"{new_link}\n"
-                    else:
+                    if link_is_ok:
                         m3u_content += extinf_line
                         m3u_content += f"{new_link}\n"
+                else:
+                    # VTV và các kênh khác không phải SCTV thì ghi thẳng link đã đè tên
+                    m3u_content += extinf_line
+                    m3u_content += f"{new_link}\n"
                     
             elif ch['source'] in ('vtvgo_dynamic', 'tv360_dynamic'):
                 error_info = ch.get('error_msg', 'Không rõ')
