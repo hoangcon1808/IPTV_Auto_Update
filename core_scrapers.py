@@ -9,7 +9,18 @@ from m3u_generator import create_slug
 
 def create_driver(proxy_ip=None, protocol="http"):
     chrome_options = Options()
+    
+    # FIX: Tối ưu hoá cho môi trường GitHub Actions chạy qua Proxy chậm.
+    # Chiến lược tải trang "eager" giúp báo thành công ngay khi tải xong DOM (bỏ qua ảnh, quảng cáo, JS bên thứ 3)
+    chrome_options.page_load_strategy = 'eager' 
+    
     chrome_options.add_argument("--headless=new") 
+    
+    # FIX: Cấu hình bắt buộc để tránh Crash/Treo Chrome trên server Linux/Windows của GitHub Actions
+    chrome_options.add_argument("--no-sandbox") 
+    chrome_options.add_argument("--disable-dev-shm-usage") 
+    chrome_options.add_argument("--disable-gpu")
+    
     chrome_options.add_argument("--mute-audio")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--log-level=3") 
@@ -49,8 +60,12 @@ def catch_m3u8_vtvgo(driver, url, max_wait=60):
         driver.get_log('performance') 
         driver.get(url)
         
-        # FIX: Loại bỏ sleep tĩnh, chuyển logic click vào vòng lặp để đối phó với mạng chậm trên GitHub Actions.
+        # WORKAROUND: Cắt lỗ Fail-Fast. Nếu Proxy sập, Chrome sẽ trả về trang hiển thị lỗi thay vì treo.
+        page_src = driver.page_source
+        if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+            return None, "Proxy chết giữa chừng (Báo động mạng)"
 
+        # FIX: Loại bỏ sleep tĩnh, chuyển logic click vào vòng lặp để đối phó với mạng chậm trên GitHub Actions.
         for i in range(max_wait):  
             # WORKAROUND: Bám đuổi click Popup Điều khoản và Play Video liên tục mỗi giây
             try:
@@ -84,6 +99,12 @@ def catch_m3u8_tv360(driver, url, max_wait=60):
         driver.set_page_load_timeout(max_wait)
         driver.get_log('performance') 
         driver.get(url)
+        
+        # WORKAROUND: Báo động mạng Fail-Fast cho TV360
+        page_src = driver.page_source
+        if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+            return None, "Proxy chết giữa chừng (Báo động mạng)"
+            
         time.sleep(3) 
         is_premium = driver.execute_script("return document.body.innerText.includes('Nội dung có phí') || document.body.innerText.includes('Vui lòng đăng ký gói');")
         if is_premium: return None, "PREMIUM"
@@ -148,7 +169,7 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
                 break 
 
             if has_old_link and t != timeouts[-1]:
-                logger(f"         -> ❌ Timeout. Xoá Cache & Khởi động lại trình duyệt...")
+                logger(f"         -> ❌ Lỗi: {s_msg}. Xoá Cache & Khởi động lại trình duyệt...")
                 driver = reboot_driver(driver, current_proxy_ip, current_protocol)
 
         if f_link:
@@ -168,7 +189,7 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
             if has_old_link:
                 ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                 ch['source'] = 'fallback_only'
-                logger(f"         -> ⚠️ Thất bại. Link Fallback lấy từ file cũ thành công.")
+                logger(f"         -> ⚠️ Thất bại ({s_msg}). Link Fallback lấy từ file cũ thành công.")
             else:
                 ch['error_msg'] = "Lỗi toàn tập"
                 logger(f"         -> ❌ Thất bại hoàn toàn (Không có file cũ).")
@@ -382,6 +403,12 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
                 logger(f"      [DEBUG VTV] Truy cập vtv1-1,1.html...")
                 driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
                 
+                # WORKAROUND: Cắt lỗ nhanh nếu trình duyệt hiển thị màn hình báo lỗi Proxy từ Chrome
+                page_src = driver.page_source
+                if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+                    logger("      [DEBUG VTV] 🚨 Phát hiện trình duyệt báo lỗi mạng (Proxy ngắt kết nối). Cắt đứt tiến trình!")
+                    raise Exception("Proxy Dead: Trình duyệt trả về trang báo lỗi mạng")
+
                 # FIX: Gỡ bỏ time.sleep(2) và thao tác click tĩnh 1 lần gây lỗi nghẽn DOM trên GitHub.
                 
                 logger(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API Header và M3U8...")
@@ -564,6 +591,13 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
             try:
                 driver.set_page_load_timeout(t)
                 driver.get("https://tv360.vn/tv")
+                
+                # WORKAROUND: Kiểm tra trang báo lỗi do mạng sập
+                page_src = driver.page_source
+                if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+                    logger("      [DEBUG TV360] 🚨 Phát hiện trình duyệt báo lỗi mạng. Cắt đứt tiến trình!")
+                    raise Exception("Proxy Dead")
+                    
                 time.sleep(3) 
                 
                 driver.execute_script("""
@@ -589,7 +623,9 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
                     dom_success = True
                     logger(f"      -> Thành công! Lấy được {len(tv360_channels)} kênh miễn phí.")
                     break
-            except: pass
+            except Exception as e: 
+                logger(f"      [DEBUG TV360] Lỗi: {e}")
+                pass
             
             logger(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
             driver = reboot_driver(driver, tv360_ip, tv360_proto)
