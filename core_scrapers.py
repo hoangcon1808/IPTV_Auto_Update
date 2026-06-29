@@ -1,5 +1,3 @@
---- START OF FILE core_scrapers.py ---
-
 import time
 import json
 import re
@@ -205,6 +203,147 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
                 i += 1
     return driver
 
+def _intercept_vtv_api_and_link(driver, timeout_sec, logger):
+    api_auth_headers = None
+    captured_api_json = None
+    temp_vtv_master_link = None
+    vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'manifest']
+    
+    for wait_sec in range(timeout_sec):
+        # WORKAROUND: Liên tục rà quét và click nút Đồng ý mỗi giây trong suốt quá trình chờ bắt Network.
+        try:
+            driver.execute_script("""
+                var btns = document.getElementsByTagName('button');
+                for (var i=0; i<btns.length; i++) {
+                    if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
+                }
+                var vids = document.getElementsByTagName('video');
+                if (vids.length > 0 && vids[0].paused) vids[0].play();
+            """)
+        except: pass
+
+        logs = driver.get_log('performance')
+        for entry in logs:
+            try:
+                log_msg = json.loads(entry['message'])['message']
+                method = log_msg['method']
+                
+                if not api_auth_headers and method == 'Network.requestWillBeSent':
+                    req_params = log_msg['params']['request']
+                    req_url = req_params['url']
+                    req_method = req_params.get('method', '').upper()
+                    
+                    if 'live-channel/api/v1/channels/byCatalog' in req_url and req_method != 'OPTIONS':
+                        temp_headers = req_params.get('headers', {})
+                        if any(k.lower() == 'authorization' for k in temp_headers.keys()):
+                            api_auth_headers = temp_headers
+                            logger(f"      [DEBUG VTV] 🔑 Đã trộm thành công Headers/Token API từ: {req_url.split('?')[0]}")
+                            
+                if not captured_api_json and method == 'Network.responseReceived':
+                    resp_url = log_msg['params']['response']['url']
+                    if 'live-channel/api/v1/channels/byCatalog' in resp_url:
+                        req_id = log_msg['params']['requestId']
+                        try:
+                            body = driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': req_id})
+                            captured_api_json = json.loads(body['body'])
+                        except: pass
+
+                if not temp_vtv_master_link and method == 'Network.requestWillBeSent':
+                    req_url = log_msg['params']['request']['url']
+                    if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
+                        temp_vtv_master_link = req_url
+                        logger(f"      [DEBUG VTV] 🚨 Bắt được Link Gốc M3U8: {req_url.split('?')[0]}")
+                        
+            except Exception: continue
+            
+        if api_auth_headers and temp_vtv_master_link:
+            logger(f"      [DEBUG VTV] 🎯 Đã có đủ Token & Link M3U8 (sau {wait_sec+1}s). Chuẩn bị Request API Thủ Công!")
+            break
+        time.sleep(1)
+    return api_auth_headers, captured_api_json, temp_vtv_master_link
+
+def _fetch_vtv_channels_via_js(driver, api_auth_headers, logger):
+    logger("      [DEBUG VTV] 🚀 Gửi Fetch Request (bằng JS trong trình duyệt) để ép lấy FULL 500 KÊNH...")
+    clean_headers = {k: v for k, v in api_auth_headers.items() if not k.startswith(':')}
+    js_fetch = f"""
+    var callback = arguments[arguments.length - 1];
+    fetch("https://web-api-vtvgo.vtvdigital.vn/live-channel/api/v1/channels/byCatalog?page=1&limit=500", {{
+        method: "GET",
+        headers: {json.dumps(clean_headers)}
+    }})
+    .then(res => res.json())
+    .then(data => callback({{success: true, data: data}}))
+    .catch(err => callback({{success: false, error: err.toString()}}));
+    """
+    try:
+        driver.set_script_timeout(15) 
+        res = driver.execute_async_script(js_fetch)
+        if res and res.get('success'):
+            logger("      [DEBUG VTV] ✅ Fetch JS thủ công THÀNH CÔNG! Đã qua mặt bộ lọc trang VTV.")
+            return res.get('data')
+        else:
+            logger(f"      [DEBUG VTV] ⚠️ Fetch JS lỗi: {res.get('error')}")
+    except Exception as req_err:
+        logger(f"      [DEBUG VTV] ❌ Ngoại lệ gọi Fetch JS: {req_err}")
+    return None
+
+def _parse_vtv_json_data(api_json_data, logger):
+    vtv_channels = []
+    groups = api_json_data['data'].get('channels', [])
+    count_channels = 0
+    for item in groups:
+        if 'channels' in item: 
+            gn_name = item.get('name', 'Khác')
+            ch_list = item.get('channels', [])
+        else: 
+            gn_name = 'Khác'
+            ch_list = [item]
+
+        for c in ch_list:
+            gn_lower = gn_name.lower()
+            ch_name_lower = c.get('name', '').lower()
+            
+            if any(kw in gn_lower or kw in ch_name_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
+                if 'vtvcab' in gn_lower or 'vtvcab' in ch_name_lower: continue
+                
+                src_type = 'vtvgo_dynamic' if any(kw in gn_lower or kw in ch_name_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
+                slug = create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
+                vtv_channels.append({
+                    'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
+                    'group_name': gn_name if gn_name != 'Khác' else 'Địa phương', 
+                    'source': src_type, 'original_source': src_type, 
+                    'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
+                    'm3u8_link': None, 'error_msg': None, 'skip': False
+                })
+                count_channels += 1
+
+    if vtv_channels:
+        logger(f"      -> Thành công! Phân tích được tổng cộng {count_channels} kênh VTV/SCTV/Địa Phương.")
+    return vtv_channels
+
+def _parse_vtv_fallback_dom(page_source, logger):
+    vtv_channels = []
+    logger("      [DEBUG VTV] ⚠️ Không lấy được JSON. Thử Fallback Cổ Điển DOM __INITIAL_STATE__...")
+    match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
+    if match:
+        state_json = json.loads(match.group(1))
+        groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
+        for group in groups:
+            gn_name = group.get('name', 'Khác')
+            gn_lower = gn_name.lower()
+            if any(kw in gn_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
+                if 'vtvcab' in gn_lower: continue
+                src_type = 'vtvgo_dynamic' if any(kw in gn_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
+                for c in group.get('channels', []):
+                    slug = create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
+                    vtv_channels.append({
+                        'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
+                        'group_name': gn_name, 'source': src_type, 'original_source': src_type, 
+                        'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
+                        'm3u8_link': None, 'error_msg': None, 'skip': False
+                    })
+    return vtv_channels
+
 def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger):
     vtv_channels = []
     vtv_master_link = None
@@ -245,147 +384,25 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
                 
                 # FIX: Gỡ bỏ time.sleep(2) và thao tác click tĩnh 1 lần gây lỗi nghẽn DOM trên GitHub.
                 
-                api_json_data = None
-                captured_api_json = None
-                api_auth_headers = None
-                temp_vtv_master_link = None
-                vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'manifest']
-                
                 logger(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API Header và M3U8...")
-                for wait_sec in range(t):
-                    # WORKAROUND: Liên tục rà quét và click nút Đồng ý mỗi giây trong suốt quá trình chờ bắt Network.
-                    try:
-                        driver.execute_script("""
-                            var btns = document.getElementsByTagName('button');
-                            for (var i=0; i<btns.length; i++) {
-                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
-                            }
-                            var vids = document.getElementsByTagName('video');
-                            if (vids.length > 0 && vids[0].paused) vids[0].play();
-                        """)
-                    except: pass
-
-                    logs = driver.get_log('performance')
-                    for entry in logs:
-                        try:
-                            log_msg = json.loads(entry['message'])['message']
-                            method = log_msg['method']
-                            
-                            if not api_auth_headers and method == 'Network.requestWillBeSent':
-                                req_params = log_msg['params']['request']
-                                req_url = req_params['url']
-                                req_method = req_params.get('method', '').upper()
-                                
-                                if 'live-channel/api/v1/channels/byCatalog' in req_url and req_method != 'OPTIONS':
-                                    temp_headers = req_params.get('headers', {})
-                                    if any(k.lower() == 'authorization' for k in temp_headers.keys()):
-                                        api_auth_headers = temp_headers
-                                        logger(f"      [DEBUG VTV] 🔑 Đã trộm thành công Headers/Token API từ: {req_url.split('?')[0]}")
-                                        
-                            if not captured_api_json and method == 'Network.responseReceived':
-                                resp_url = log_msg['params']['response']['url']
-                                if 'live-channel/api/v1/channels/byCatalog' in resp_url:
-                                    req_id = log_msg['params']['requestId']
-                                    try:
-                                        body = driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': req_id})
-                                        captured_api_json = json.loads(body['body'])
-                                    except: pass
-
-                            if not temp_vtv_master_link and method == 'Network.requestWillBeSent':
-                                req_url = log_msg['params']['request']['url']
-                                if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
-                                    temp_vtv_master_link = req_url
-                                    logger(f"      [DEBUG VTV] 🚨 Bắt được Link Gốc M3U8: {req_url.split('?')[0]}")
-                                    
-                        except Exception: continue
-                        
-                    if api_auth_headers and temp_vtv_master_link:
-                        logger(f"      [DEBUG VTV] 🎯 Đã có đủ Token & Link M3U8 (sau {wait_sec+1}s). Chuẩn bị Request API Thủ Công!")
-                        break
-                    time.sleep(1)
+                api_auth_headers, captured_api_json, temp_vtv_master_link = _intercept_vtv_api_and_link(driver, t, logger)
                     
+                api_json_data = None
                 if api_auth_headers:
-                    logger("      [DEBUG VTV] 🚀 Gửi Fetch Request (bằng JS trong trình duyệt) để ép lấy FULL 500 KÊNH...")
-                    clean_headers = {k: v for k, v in api_auth_headers.items() if not k.startswith(':')}
-                    js_fetch = f"""
-                    var callback = arguments[arguments.length - 1];
-                    fetch("https://web-api-vtvgo.vtvdigital.vn/live-channel/api/v1/channels/byCatalog?page=1&limit=500", {{
-                        method: "GET",
-                        headers: {json.dumps(clean_headers)}
-                    }})
-                    .then(res => res.json())
-                    .then(data => callback({{success: true, data: data}}))
-                    .catch(err => callback({{success: false, error: err.toString()}}));
-                    """
-                    try:
-                        driver.set_script_timeout(15) 
-                        res = driver.execute_async_script(js_fetch)
-                        if res and res.get('success'):
-                            api_json_data = res.get('data')
-                            logger("      [DEBUG VTV] ✅ Fetch JS thủ công THÀNH CÔNG! Đã qua mặt bộ lọc trang VTV.")
-                        else:
-                            logger(f"      [DEBUG VTV] ⚠️ Fetch JS lỗi: {res.get('error')}")
-                    except Exception as req_err:
-                        logger(f"      [DEBUG VTV] ❌ Ngoại lệ gọi Fetch JS: {req_err}")
+                    api_json_data = _fetch_vtv_channels_via_js(driver, api_auth_headers, logger)
 
                 if not api_json_data and captured_api_json:
                     logger("      [DEBUG VTV] ⚠️ Fallback sử dụng dữ liệu JSON bị giới hạn bắt được từ trình duyệt.")
                     api_json_data = captured_api_json
 
                 if api_json_data and 'data' in api_json_data:
-                    groups = api_json_data['data'].get('channels', [])
-                    count_channels = 0
-                    for item in groups:
-                        if 'channels' in item: 
-                            gn_name = item.get('name', 'Khác')
-                            ch_list = item.get('channels', [])
-                        else: 
-                            gn_name = 'Khác'
-                            ch_list = [item]
-
-                        for c in ch_list:
-                            gn_lower = gn_name.lower()
-                            ch_name_lower = c.get('name', '').lower()
-                            
-                            if any(kw in gn_lower or kw in ch_name_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
-                                if 'vtvcab' in gn_lower or 'vtvcab' in ch_name_lower: continue
-                                
-                                src_type = 'vtvgo_dynamic' if any(kw in gn_lower or kw in ch_name_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
-                                slug = create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
-                                vtv_channels.append({
-                                    'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                                    'group_name': gn_name if gn_name != 'Khác' else 'Địa phương', 
-                                    'source': src_type, 'original_source': src_type, 
-                                    'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
-                                    'm3u8_link': None, 'error_msg': None, 'skip': False
-                                })
-                                count_channels += 1
-
+                    vtv_channels = _parse_vtv_json_data(api_json_data, logger)
                     if vtv_channels:
                         dom_success = True
-                        logger(f"      -> Thành công! Phân tích được tổng cộng {count_channels} kênh VTV/SCTV/Địa Phương.")
                 else:
-                    logger("      [DEBUG VTV] ⚠️ Không lấy được JSON. Thử Fallback Cổ Điển DOM __INITIAL_STATE__...")
-                    page_source = driver.page_source
-                    match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
-                    if match:
-                        state_json = json.loads(match.group(1))
-                        groups = state_json.get('global', {}).get('dataList', {}).get('channel-by-catalog-all', {}).get('channels', [])
-                        for group in groups:
-                            gn_name = group.get('name', 'Khác')
-                            gn_lower = gn_name.lower()
-                            if any(kw in gn_lower for kw in ['vtv', 'sctv', 'địa phương', 'dia phuong', 'trong nước', 'thiết yếu']):
-                                if 'vtvcab' in gn_lower: continue
-                                src_type = 'vtvgo_dynamic' if any(kw in gn_lower for kw in ['địa phương', 'dia phuong', 'trong nước', 'thiết yếu']) else 'vtvgo_static'
-                                for c in group.get('channels', []):
-                                    slug = create_slug(c.get('name')) if not c.get('slug') else c.get('slug')
-                                    vtv_channels.append({
-                                        'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                                        'group_name': gn_name, 'source': src_type, 'original_source': src_type, 
-                                        'url': f"https://vtvgo.vn/channel/{slug}-1,{c.get('id')}.html",
-                                        'm3u8_link': None, 'error_msg': None, 'skip': False
-                                    })
-                        if vtv_channels: dom_success = True
+                    vtv_channels = _parse_vtv_fallback_dom(driver.page_source, logger)
+                    if vtv_channels: 
+                        dom_success = True
                         
                 if temp_vtv_master_link:
                     vtv_master_link = temp_vtv_master_link
@@ -440,6 +457,8 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
 
     if not dom_success:
         logger("   [VTV] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
+        # BUSINESS RULE: Chỉ khôi phục các kênh thuộc nhóm VTV, SCTV, hoặc Địa phương từ M3U cũ,
+        # bỏ qua các kênh VTVCab vì hiện tại VTVCab đã áp dụng DRM mạnh và yêu cầu tài khoản trả phí.
         for old_name, old_data in old_links_dict.items():
             gn_lower = old_data.get('group', '').lower()
             if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
@@ -584,6 +603,7 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
 
     if not dom_success:
         logger("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
+        # BUSINESS RULE: Tương tự như VTV, chỉ khôi phục các kênh có khả năng lấy được từ file cũ đối với TV360.
         for old_name, old_data in old_links_dict.items():
             gn_lower = old_data.get('group', '').lower()
             if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
@@ -608,4 +628,3 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
         
     if driver: driver.quit()
     return tv360_channels, tv360_proxy_stats
---- END OF FILE core_scrapers.py ---
