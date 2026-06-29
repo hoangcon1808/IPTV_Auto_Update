@@ -457,8 +457,6 @@ def _vtv_extract_dom_loop(driver, vtv_ip, vtv_proto, logger):
 def _vtv_fallback_from_old_file(old_links_dict, logger):
     logger("[VTV/Fallback] - [START] - Đang khôi phục DOM từ file M3U cũ...")
     vtv_channels = []
-    # BUSINESS RULE: Chỉ khôi phục các kênh thuộc nhóm VTV, SCTV, hoặc Địa phương từ M3U cũ,
-    # bỏ qua các kênh VTVCab vì hiện tại VTVCab đã áp dụng DRM mạnh và yêu cầu tài khoản trả phí.
     for old_name, old_data in old_links_dict.items():
         gn_lower = old_data.get('group', '').lower()
         if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
@@ -509,12 +507,38 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
     if not dom_success:
         vtv_channels = _vtv_fallback_from_old_file(old_links_dict, logger)
 
+    # BUSINESS RULE: Nếu lấy được DOM nhưng mất Link Gốc VTV1, 
+    # ta ép kênh VTV1 thành dạng "quét ngầm" và đẩy xuống CUỐI MẢNG.
+    # Khi hệ thống duyệt qua hết các kênh địa phương đầu tiên và tìm ra Proxy "chân ái" ổn định nhất, 
+    # VTV1 nằm ở cuối mảng sẽ hốt trọn link thành công bằng Proxy xịn đó.
+    if vtv_channels and not vtv_master_link and vtv_channels[0]['source'] != 'fallback_only':
+        vtv1_idx = None
+        for idx, ch in enumerate(vtv_channels):
+            if ch['name'].upper() == "VTV1":
+                vtv1_idx = idx
+                break
+        
+        if vtv1_idx is not None:
+            logger("[VTV/Pipeline] - [STRATEGY] - Mất Link Gốc VTV1 lúc dạo đầu. Đang đưa VTV1 xuống cuối mảng cào ngầm...")
+            vtv1_ch = vtv_channels.pop(vtv1_idx)
+            vtv1_ch['source'] = 'vtvgo_dynamic'
+            vtv1_ch['skip'] = False
+            vtv_channels.append(vtv1_ch)
+
     if driver and vtv_channels and vtv_channels[0]['source'] != 'fallback_only':
         vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
         if vtv_dynamic:
-            logger(f"[VTV/Pipeline] - [START] - Duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương...")
+            logger(f"[VTV/Pipeline] - [START] - Duyệt ngầm {len(vtv_dynamic)} Kênh...")
             driver = scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, exclude_proxies, vtv_ip, vtv_proto, vtv_proxy_stats, vn_proxies, use_auto_proxy, logger)
                     
+    # Hậu kiểm: Vớt lại Master Link từ VTV1 nếu chiến thuật ép cuối mảng thành công
+    if not vtv_master_link and vtv_channels:
+        for ch in vtv_channels:
+            if ch['name'].upper() == "VTV1" and ch.get('m3u8_link') and ch['source'] != 'fallback_only':
+                vtv_master_link = ch['m3u8_link']
+                logger("[VTV/Pipeline] - [SUCCESS] - Đã thu hồi Master Link (VTV1) từ cuối mảng quét ngầm thành công!")
+                break
+
     if driver: driver.quit()
     return vtv_master_link, vtv_channels, vtv_proxy_stats
 
