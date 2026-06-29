@@ -418,26 +418,25 @@ def _vtv_extract_dom_loop(driver, vtv_ip, vtv_proto, logger):
             if temp_vtv_master_link:
                 vtv_master_link = temp_vtv_master_link
                     
-            if dom_success and vtv_master_link:
-                for ch in vtv_channels:
-                    if ch['name'].upper() == "VTV1":
-                        ch['m3u8_link'] = vtv_master_link
-                        ch['skip'] = True 
-                        break
-                break 
-            elif dom_success:
-                if t == 240:
-                    logger("[VTV/DOM] - [WARNING] - Chỉ được DOM, KHÔNG CÓ Link Gốc VTV1. Chấp nhận.")
-                    break
+            # BUSINESS RULE: Nếu lấy được DOM thì phá vỡ vòng lặp retry ngay lập tức.
+            # Không cần quan tâm đã có vtv_master_link hay chưa vì chiến thuật "Dời VTV1" sẽ xử lý sau.
+            if dom_success:
+                if vtv_master_link:
+                    for ch in vtv_channels:
+                        if ch['name'].upper() == "VTV1":
+                            ch['m3u8_link'] = vtv_master_link
+                            ch['skip'] = True 
+                            break
+                    logger("[VTV/DOM] - [SUCCESS] - Lấy thành công cả DOM và Link Gốc VTV1.")
                 else:
-                    logger("[VTV/DOM] - [RETRY] - ⚠️ Lấy được DOM nhưng mất Link Gốc VTV1. Thử timeout cao hơn...")
-                    vtv_channels.clear()
-                    dom_success = False
+                    logger("[VTV/DOM] - [INFO] - Lấy được DOM nhưng thiếu Link Gốc VTV1. Hệ thống sẽ chuyển VTV1 sang quét ngầm...")
+                break 
 
         except Exception as ex: 
             logger(f"[VTV/DOM] - [ERROR] - Ngoại lệ: {ex}")
         
-        if not dom_success or not vtv_master_link:
+        # Chỉ debug và khởi động lại nếu THẬT SỰ không lấy được DOM
+        if not dom_success:
             try:
                 logger(f"[VTV/Debug] - [INFO] - Tiêu đề trang hiện tại: {driver.title}")
                 page_src = driver.page_source
