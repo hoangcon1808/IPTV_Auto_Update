@@ -145,17 +145,17 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
             if has_old_link:
                 ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                 ch['source'] = 'fallback_only'
-                logger(f"         [{i+1}/{len(channels)}] Kênh {ch['name']}: ⚠️ DOM Fallback không có URL web. Áp dụng Link Fallback thành công.")
+                logger(f"[{platform.upper()}/Scanner] - [FALLBACK] - Kênh {ch['name']}: Áp dụng Link Fallback thành công.")
             else:
                 ch['error_msg'] = "Không có URL để quét"
-                logger(f"         [{i+1}/{len(channels)}] Kênh {ch['name']}: ❌ Thất bại (Không có URL web, không có link cũ).")
+                logger(f"[{platform.upper()}/Scanner] - [FAILED] - Kênh {ch['name']}: Không có URL web, không có link cũ.")
             i += 1
             continue
 
         timeouts = [60, 120, 240] if has_old_link else [60]
 
         for t in timeouts:
-            logger(f"      [{i+1}/{len(channels)}] Cào kênh {ch['name']} (Chờ tối đa {t}s)...")
+            logger(f"[{platform.upper()}/Scanner] - [PROCESS] - Cào kênh {ch['name']} (Chờ tối đa {t}s)...")
             
             if platform == 'vtv':
                 f_link, s_msg = catch_m3u8_vtvgo(driver, ch['url'], max_wait=t)
@@ -169,7 +169,7 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
                 break 
 
             if has_old_link and t != timeouts[-1]:
-                logger(f"         -> ❌ Lỗi: {s_msg}. Xoá Cache & Khởi động lại trình duyệt...")
+                logger(f"[{platform.upper()}/Scanner] - [RETRY] - Lỗi: {s_msg}. Khởi động lại trình duyệt...")
                 driver = reboot_driver(driver, current_proxy_ip, current_protocol)
 
         if f_link:
@@ -178,10 +178,10 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
             if current_proxy_ip:
                 proxy_key = f"{current_protocol}://{current_proxy_ip}"
                 proxy_stats[proxy_key] = proxy_stats.get(proxy_key, 0) + 1 
-            logger(f"         -> ✅ Lấy Link Thành Công")
+            logger(f"[{platform.upper()}/Scanner] - [SUCCESS] - Lấy Link Thành Công")
             i += 1
         elif ch.get('skip'):
-            logger(f"         -> 💰 Kênh Thu Phí. Bỏ qua.")
+            logger(f"[{platform.upper()}/Scanner] - [SKIP] - Kênh Thu Phí. Bỏ qua.")
             consecutive_fails = 0
             i += 1
         else:
@@ -189,21 +189,23 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
             if has_old_link:
                 ch['m3u8_link'] = old_links_dict[ch['name']]['url']
                 ch['source'] = 'fallback_only'
-                logger(f"         -> ⚠️ Thất bại ({s_msg}). Link Fallback lấy từ file cũ thành công.")
+                logger(f"[{platform.upper()}/Scanner] - [FALLBACK] - Thất bại ({s_msg}). Dùng Fallback lấy từ file cũ.")
             else:
                 ch['error_msg'] = "Lỗi toàn tập"
-                logger(f"         -> ❌ Thất bại hoàn toàn (Không có file cũ).")
+                logger(f"[{platform.upper()}/Scanner] - [FAILED] - Thất bại hoàn toàn (Không có file cũ).")
 
+            # BUSINESS RULE: Nếu 3 kênh liên tiếp thất bại, IP hiện tại có khả năng đã bị Server chặn ngầm.
+            # Cần đổi Proxy mới và lùi lại (rewind) 3 bước để cào lại các kênh bị đánh dấu lỗi oan.
             if consecutive_fails >= 3:
-                logger(f"   [CẢNH BÁO] 3 kênh liên tiếp thất bại. Cần đổi IP!")
+                logger(f"[{platform.upper()}/Scanner] - [WARNING] - 3 kênh liên tiếp thất bại. Cần đổi IP!")
                 if current_proxy_ip:
                     exclude_set.add(current_proxy_ip) 
                 
-                logger(f"   🔄 ĐANG TÌM PROXY MỚI THAY THẾ...")
+                logger(f"[{platform.upper()}/Proxy] - [FETCH] - Đang tìm Proxy mới thay thế...")
                 new_proxy_ip, new_protocol = get_best_proxy_for_target(vn_proxies, platform, exclude_set, logger)
 
                 if new_proxy_ip:
-                    logger(f"   🔄 ĐỔI IP THÀNH CÔNG: {new_proxy_ip}. Đang quay lui 3 bước để cào lại...")
+                    logger(f"[{platform.upper()}/Proxy] - [SUCCESS] - Đổi IP: {new_proxy_ip}. Quay lui 3 bước...")
                     current_proxy_ip = new_proxy_ip
                     current_protocol = new_protocol
                     driver = reboot_driver(driver, current_proxy_ip, current_protocol)
@@ -217,7 +219,7 @@ def scan_channels_with_rotation(driver, channels, platform, old_links_dict, excl
                         channels[rewind_idx]['error_msg'] = None
                     i = start_rewind 
                 else:
-                    logger(f"   ❌ Kho IP đã cạn kiệt (Hoặc đang tắt tự xoay IP). Chấp nhận số phận, tiếp tục cào bằng Fallback...")
+                    logger(f"[{platform.upper()}/Proxy] - [EXHAUSTED] - Kho IP cạn kiệt. Tiếp tục cào bằng Fallback...")
                     consecutive_fails = 0 
                     i += 1
             else:
@@ -231,7 +233,6 @@ def _intercept_vtv_api_and_link(driver, timeout_sec, logger):
     vtv_keywords = ['vtv', 'cdn', 'stream', 'live', 'media', 'truyenhinhso', 'mediatech', 'playlist', 'manifest']
     
     for wait_sec in range(timeout_sec):
-        # WORKAROUND: Liên tục rà quét và click nút Đồng ý mỗi giây trong suốt quá trình chờ bắt Network.
         try:
             driver.execute_script("""
                 var btns = document.getElementsByTagName('button');
@@ -258,7 +259,7 @@ def _intercept_vtv_api_and_link(driver, timeout_sec, logger):
                         temp_headers = req_params.get('headers', {})
                         if any(k.lower() == 'authorization' for k in temp_headers.keys()):
                             api_auth_headers = temp_headers
-                            logger(f"      [DEBUG VTV] 🔑 Đã trộm thành công Headers/Token API từ: {req_url.split('?')[0]}")
+                            logger(f"[VTV/Network] - [INTERCEPT] - Đã trộm Headers/Token API: {req_url.split('?')[0]}")
                             
                 if not captured_api_json and method == 'Network.responseReceived':
                     resp_url = log_msg['params']['response']['url']
@@ -273,18 +274,18 @@ def _intercept_vtv_api_and_link(driver, timeout_sec, logger):
                     req_url = log_msg['params']['request']['url']
                     if '.m3u8' in req_url and any(kw in req_url.lower() for kw in vtv_keywords):
                         temp_vtv_master_link = req_url
-                        logger(f"      [DEBUG VTV] 🚨 Bắt được Link Gốc M3U8: {req_url.split('?')[0]}")
+                        logger(f"[VTV/Network] - [INTERCEPT] - Bắt được Link Gốc M3U8: {req_url.split('?')[0]}")
                         
             except Exception: continue
             
         if api_auth_headers and temp_vtv_master_link:
-            logger(f"      [DEBUG VTV] 🎯 Đã có đủ Token & Link M3U8 (sau {wait_sec+1}s). Chuẩn bị Request API Thủ Công!")
+            logger(f"[VTV/Network] - [READY] - Có đủ Token & Link M3U8 (sau {wait_sec+1}s).")
             break
         time.sleep(1)
     return api_auth_headers, captured_api_json, temp_vtv_master_link
 
 def _fetch_vtv_channels_via_js(driver, api_auth_headers, logger):
-    logger("      [DEBUG VTV] 🚀 Gửi Fetch Request (bằng JS trong trình duyệt) để ép lấy FULL 500 KÊNH...")
+    logger("[VTV/Fetch] - [REQUEST] - Gửi Fetch Request bằng JS để lấy FULL 500 Kênh...")
     clean_headers = {k: v for k, v in api_auth_headers.items() if not k.startswith(':')}
     js_fetch = f"""
     var callback = arguments[arguments.length - 1];
@@ -300,15 +301,16 @@ def _fetch_vtv_channels_via_js(driver, api_auth_headers, logger):
         driver.set_script_timeout(15) 
         res = driver.execute_async_script(js_fetch)
         if res and res.get('success'):
-            logger("      [DEBUG VTV] ✅ Fetch JS thủ công THÀNH CÔNG! Đã qua mặt bộ lọc trang VTV.")
+            logger("[VTV/Fetch] - [SUCCESS] - Fetch JS thủ công hoàn tất.")
             return res.get('data')
         else:
-            logger(f"      [DEBUG VTV] ⚠️ Fetch JS lỗi: {res.get('error')}")
+            logger(f"[VTV/Fetch] - [FAILED] - Fetch JS lỗi: {res.get('error')}")
     except Exception as req_err:
-        logger(f"      [DEBUG VTV] ❌ Ngoại lệ gọi Fetch JS: {req_err}")
+        logger(f"[VTV/Fetch] - [ERROR] - Ngoại lệ gọi Fetch JS: {req_err}")
     return None
 
 def _parse_vtv_json_data(api_json_data, logger):
+    logger("[VTV/Parser] - [START] - Phân tích dữ liệu JSON VTV...")
     vtv_channels = []
     groups = api_json_data['data'].get('channels', [])
     count_channels = 0
@@ -339,12 +341,12 @@ def _parse_vtv_json_data(api_json_data, logger):
                 count_channels += 1
 
     if vtv_channels:
-        logger(f"      -> Thành công! Phân tích được tổng cộng {count_channels} kênh VTV/SCTV/Địa Phương.")
+        logger(f"[VTV/Parser] - [SUCCESS] - Phân tích được {count_channels} kênh VTV/SCTV/Địa Phương.")
     return vtv_channels
 
 def _parse_vtv_fallback_dom(page_source, logger):
+    logger("[VTV/Parser] - [FALLBACK] - Thử Fallback Cổ Điển DOM __INITIAL_STATE__...")
     vtv_channels = []
-    logger("      [DEBUG VTV] ⚠️ Không lấy được JSON. Thử Fallback Cổ Điển DOM __INITIAL_STATE__...")
     match = re.search(r'<script id="__INITIAL_STATE__" type="application/json">(.*?)</script>', page_source)
     if match:
         state_json = json.loads(match.group(1))
@@ -365,157 +367,160 @@ def _parse_vtv_fallback_dom(page_source, logger):
                     })
     return vtv_channels
 
+def _get_active_proxy(platform, alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger, current_ip=None, current_proto="http"):
+    if not use_auto_proxy: return None, "http"
+    if current_ip: return current_ip, current_proto
+    
+    if alive_cached.get(platform) and alive_cached[platform]["ip"] not in exclude_proxies:
+        ip, proto = alive_cached[platform]["ip"], alive_cached[platform]["protocol"]
+        logger(f"[{platform.upper()}/Proxy] - [CACHE_HIT] - Dùng IP Cache: {ip}")
+        return ip, proto
+        
+    logger(f"[{platform.upper()}/Proxy] - [FETCH] - Lấy Proxy mới từ danh sách...")
+    ip, proto = get_best_proxy_for_target(vn_proxies, platform, exclude_proxies, logger)
+    return ip, proto
+
+def _vtv_extract_dom_loop(driver, vtv_ip, vtv_proto, logger):
+    vtv_channels = []
+    vtv_master_link = None
+    dom_success = False
+
+    for t in [60, 120, 240]:
+        logger(f"[VTV/DOM] - [START] - Truy cập VTV1 (Timeout: {t}s)")
+        try:
+            driver.set_page_load_timeout(t)
+            driver.get_log('performance') 
+            driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
+            
+            # WORKAROUND: Cắt lỗ nhanh nếu trình duyệt hiển thị màn hình báo lỗi Proxy từ Chrome
+            page_src = driver.page_source
+            if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+                logger("[VTV/DOM] - [FAILED] - 🚨 Proxy Dead: Trình duyệt báo lỗi mạng")
+                raise Exception("Proxy Dead: Trình duyệt trả về trang báo lỗi mạng")
+
+            api_auth_headers, captured_api_json, temp_vtv_master_link = _intercept_vtv_api_and_link(driver, t, logger)
+                
+            api_json_data = None
+            if api_auth_headers:
+                api_json_data = _fetch_vtv_channels_via_js(driver, api_auth_headers, logger)
+
+            if not api_json_data and captured_api_json:
+                logger("[VTV/DOM] - [FALLBACK] - ⚠️ Sử dụng JSON bị giới hạn bắt được từ trình duyệt.")
+                api_json_data = captured_api_json
+
+            if api_json_data and 'data' in api_json_data:
+                vtv_channels = _parse_vtv_json_data(api_json_data, logger)
+                if vtv_channels: dom_success = True
+            else:
+                vtv_channels = _parse_vtv_fallback_dom(driver.page_source, logger)
+                if vtv_channels: dom_success = True
+                    
+            if temp_vtv_master_link:
+                vtv_master_link = temp_vtv_master_link
+                    
+            if dom_success and vtv_master_link:
+                for ch in vtv_channels:
+                    if ch['name'].upper() == "VTV1":
+                        ch['m3u8_link'] = vtv_master_link
+                        ch['skip'] = True 
+                        break
+                break 
+            elif dom_success:
+                if t == 240:
+                    logger("[VTV/DOM] - [WARNING] - Chỉ được DOM, KHÔNG CÓ Link Gốc VTV1. Chấp nhận.")
+                    break
+                else:
+                    logger("[VTV/DOM] - [RETRY] - ⚠️ Lấy được DOM nhưng mất Link Gốc VTV1. Thử timeout cao hơn...")
+                    vtv_channels.clear()
+                    dom_success = False
+
+        except Exception as ex: 
+            logger(f"[VTV/DOM] - [ERROR] - Ngoại lệ: {ex}")
+        
+        if not dom_success or not vtv_master_link:
+            try:
+                logger(f"[VTV/Debug] - [INFO] - Tiêu đề trang hiện tại: {driver.title}")
+                page_src = driver.page_source
+                clean_html = re.sub(r'\s+', ' ', page_src[:1000])
+                logger(f"[VTV/Debug] - [INFO] - 1000 ký tự HTML:\n{clean_html}")
+                screenshot_path = os.path.join(os.getcwd(), f"debug_vtv_proxy_{int(time.time())}.png")
+                driver.save_screenshot(screenshot_path)
+                logger(f"[VTV/Debug] - [INFO] - 📸 Đã lưu ảnh: {screenshot_path}")
+            except Exception as debug_err:
+                logger(f"[VTV/Debug] - [ERROR] - ⚠️ Lỗi debug: {debug_err}")
+        
+            logger("[VTV/DOM] - [REBOOT] - Chưa đủ dữ liệu. Khởi động lại trình duyệt...")
+            driver = reboot_driver(driver, vtv_ip, vtv_proto)
+
+    return driver, dom_success, vtv_channels, vtv_master_link
+
+def _vtv_fallback_from_old_file(old_links_dict, logger):
+    logger("[VTV/Fallback] - [START] - Đang khôi phục DOM từ file M3U cũ...")
+    vtv_channels = []
+    # BUSINESS RULE: Chỉ khôi phục các kênh thuộc nhóm VTV, SCTV, hoặc Địa phương từ M3U cũ,
+    # bỏ qua các kênh VTVCab vì hiện tại VTVCab đã áp dụng DRM mạnh và yêu cầu tài khoản trả phí.
+    for old_name, old_data in old_links_dict.items():
+        gn_lower = old_data.get('group', '').lower()
+        if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
+            if 'vtvcab' in gn_lower: continue
+            src_type = 'vtvgo_static' if ('vtv' in gn_lower or 'sctv' in gn_lower) else 'vtvgo_dynamic'
+            vtv_channels.append({
+                'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
+                'group_name': old_data.get('group', 'Khác'), 
+                'source': src_type, 'original_source': src_type,
+                'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
+            })
+    logger(f"[VTV/Fallback] - [SUCCESS] - Đã khôi phục {len(vtv_channels)} kênh VTV từ file.")
+    return vtv_channels
+
 def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger):
+    logger("\n[VTV/Pipeline] - [INIT] - ====== BẮT ĐẦU CHU TRÌNH VTV ======")
     vtv_channels = []
     vtv_master_link = None
     vtv_proxy_stats = {}
-    
-    logger("\n====== BẮT ĐẦU CHU TRÌNH VTV ======")
     vtv_ip, vtv_proto = None, "http"
     driver = None
     dom_success = False
     no_proxy_attempts = 0
 
     while True: 
-        if use_auto_proxy and not vtv_ip:
-            if alive_cached["vtv"] and alive_cached["vtv"]["ip"] not in exclude_proxies:
-                vtv_ip, vtv_proto = alive_cached["vtv"]["ip"], alive_cached["vtv"]["protocol"]
-            else:
-                vtv_ip, vtv_proto = get_best_proxy_for_target(vn_proxies, "vtv", exclude_proxies, logger)
-        
-        if not vtv_ip and use_auto_proxy: 
-            break 
-
+        vtv_ip, vtv_proto = _get_active_proxy("vtv", alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger, vtv_ip, vtv_proto)
+        if use_auto_proxy and not vtv_ip: break 
         if not use_auto_proxy:
-            if no_proxy_attempts >= 3:
-                break
+            if no_proxy_attempts >= 3: break
             no_proxy_attempts += 1
 
-        logger(f"▶ Mở trình duyệt VTV (Proxy: {vtv_ip} - Giao thức: {vtv_proto.upper()})")
+        logger(f"[VTV/Browser] - [START] - Mở trình duyệt (Proxy: {vtv_ip} | {vtv_proto.upper()})")
         driver = reboot_driver(driver, vtv_ip, vtv_proto)
         
-        for t in [60, 120, 240]:
-            logger(f"   [VTV] Đang truy cập VTV1 để GỘP bước lấy Danh sách kênh (DOM) & Link Gốc - Chờ tối đa {t}s...")
-            try:
-                driver.set_page_load_timeout(t)
-                driver.get_log('performance') 
-                
-                logger(f"      [DEBUG VTV] Truy cập vtv1-1,1.html...")
-                driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                
-                # WORKAROUND: Cắt lỗ nhanh nếu trình duyệt hiển thị màn hình báo lỗi Proxy từ Chrome
-                page_src = driver.page_source
-                if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
-                    logger("      [DEBUG VTV] 🚨 Phát hiện trình duyệt báo lỗi mạng (Proxy ngắt kết nối). Cắt đứt tiến trình!")
-                    raise Exception("Proxy Dead: Trình duyệt trả về trang báo lỗi mạng")
+        driver, dom_success, vtv_channels, vtv_master_link = _vtv_extract_dom_loop(driver, vtv_ip, vtv_proto, logger)
 
-                # FIX: Gỡ bỏ time.sleep(2) và thao tác click tĩnh 1 lần gây lỗi nghẽn DOM trên GitHub.
-                
-                logger(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API Header và M3U8...")
-                api_auth_headers, captured_api_json, temp_vtv_master_link = _intercept_vtv_api_and_link(driver, t, logger)
-                    
-                api_json_data = None
-                if api_auth_headers:
-                    api_json_data = _fetch_vtv_channels_via_js(driver, api_auth_headers, logger)
-
-                if not api_json_data and captured_api_json:
-                    logger("      [DEBUG VTV] ⚠️ Fallback sử dụng dữ liệu JSON bị giới hạn bắt được từ trình duyệt.")
-                    api_json_data = captured_api_json
-
-                if api_json_data and 'data' in api_json_data:
-                    vtv_channels = _parse_vtv_json_data(api_json_data, logger)
-                    if vtv_channels:
-                        dom_success = True
-                else:
-                    vtv_channels = _parse_vtv_fallback_dom(driver.page_source, logger)
-                    if vtv_channels: 
-                        dom_success = True
-                        
-                if temp_vtv_master_link:
-                    vtv_master_link = temp_vtv_master_link
-                    if vtv_ip: 
-                        proxy_key = f"{vtv_proto}://{vtv_ip}"
-                        vtv_proxy_stats[proxy_key] = vtv_proxy_stats.get(proxy_key, 0) + 1
-                        
-                if dom_success and vtv_master_link:
-                    for ch in vtv_channels:
-                        if ch['name'].upper() == "VTV1":
-                            ch['m3u8_link'] = vtv_master_link
-                            ch['skip'] = True 
-                            break
-
-                if dom_success and vtv_master_link:
-                    break 
-                elif dom_success:
-                    if t == 240:
-                        logger("      ⚠️ Cố gắng cuối cùng chỉ được DOM, KHÔNG CÓ Link Gốc VTV1. Chấp nhận và đi tiếp.")
-                        break
-                    else:
-                        logger("      ⚠️ Lấy được DOM nhưng mất Link Gốc VTV1. Đang thử lại mức Timeout cao hơn...")
-                        vtv_channels.clear()
-                        dom_success = False
-
-            except Exception as ex: 
-                logger(f"      [DEBUG VTV] ❌ Ngoại lệ hệ thống khi cào DOM VTV: {ex}")
-            
-            if not dom_success or not vtv_master_link:
-                # FIX: BẮT ĐẦU DEBUG PAGE SOURCE & SCREENSHOT TRƯỚC KHI REBOOT 
-                try:
-                    logger(f"      [DEBUG VTV CHUYÊN SÂU] Tiêu đề trang hiện tại: {driver.title}")
-                    page_src = driver.page_source
-                    clean_html = re.sub(r'\s+', ' ', page_src[:1000])
-                    logger(f"      [DEBUG VTV CHUYÊN SÂU] 1000 ký tự HTML đầu tiên:\n{clean_html}")
-                    screenshot_path = os.path.join(os.getcwd(), f"debug_vtv_proxy_{int(time.time())}.png")
-                    driver.save_screenshot(screenshot_path)
-                    logger(f"      [DEBUG VTV CHUYÊN SÂU] 📸 Đã lưu ảnh chụp màn hình tại: {screenshot_path}")
-                except Exception as debug_err:
-                    logger(f"      [DEBUG VTV CHUYÊN SÂU] ⚠️ Lỗi khi cố trích xuất thông tin debug: {debug_err}")
-                # --- KẾT THÚC DEBUG ---
-            
-                logger(f"      -> Chưa đủ dữ liệu. Đang khởi động lại trình duyệt xoá Cache...")
-                driver = reboot_driver(driver, vtv_ip, vtv_proto)
-
-        if dom_success: break
+        if dom_success: 
+            if vtv_ip: 
+                proxy_key = f"{vtv_proto}://{vtv_ip}"
+                vtv_proxy_stats[proxy_key] = vtv_proxy_stats.get(proxy_key, 0) + 1
+            break
         
         if vtv_ip:
-            logger(f"   [VTV] ⚠️ IP {vtv_ip} thất bại. Loại bỏ và tìm IP khác...")
+            logger(f"[VTV/Proxy] - [REJECT] - IP {vtv_ip} thất bại. Loại bỏ và tìm IP khác...")
             exclude_proxies.add(vtv_ip)
             vtv_ip = None 
 
     if not dom_success:
-        logger("   [VTV] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
-        # BUSINESS RULE: Chỉ khôi phục các kênh thuộc nhóm VTV, SCTV, hoặc Địa phương từ M3U cũ,
-        # bỏ qua các kênh VTVCab vì hiện tại VTVCab đã áp dụng DRM mạnh và yêu cầu tài khoản trả phí.
-        for old_name, old_data in old_links_dict.items():
-            gn_lower = old_data.get('group', '').lower()
-            if 'vtv' in gn_lower or 'địa phương' in gn_lower or 'sctv' in gn_lower:
-                if 'vtvcab' in gn_lower: continue
-                src_type = 'vtvgo_static' if ('vtv' in gn_lower or 'sctv' in gn_lower) else 'vtvgo_dynamic'
-                vtv_channels.append({
-                    'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
-                    'group_name': old_data.get('group', 'Khác'), 
-                    'source': src_type, 'original_source': src_type,
-                    'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
-                })
-        logger(f"      -> Đã khôi phục DOM {len(vtv_channels)} kênh VTV từ file.")
+        vtv_channels = _vtv_fallback_from_old_file(old_links_dict, logger)
 
     if driver and vtv_channels and vtv_channels[0]['source'] != 'fallback_only':
         vtv_dynamic = [ch for ch in vtv_channels if ch['source'] == 'vtvgo_dynamic' and not ch.get('skip')]
         if vtv_dynamic:
-            logger(f"   [VTV] Bắt đầu duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương (Đảo Proxy nếu Fail 3 kênh)...")
+            logger(f"[VTV/Pipeline] - [START] - Duyệt ngầm {len(vtv_dynamic)} Kênh Địa phương...")
             driver = scan_channels_with_rotation(driver, vtv_dynamic, 'vtv', old_links_dict, exclude_proxies, vtv_ip, vtv_proto, vtv_proxy_stats, vn_proxies, use_auto_proxy, logger)
                     
     if driver: driver.quit()
-    
     return vtv_master_link, vtv_channels, vtv_proxy_stats
 
-def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger):
+def _tv360_extract_dom_loop(driver, tv360_ip, tv360_proto, logger):
     tv360_channels = []
-    tv360_proxy_stats = {}
-    
-    logger("\n====== BẮT ĐẦU CHU TRÌNH TV360 ======")
-    tv360_ip, tv360_proto = None, "http"
-    driver = None
+    dom_success = False
     
     js_extractor_smart = """
         var results = [];
@@ -567,89 +572,97 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
         return unique;
     """
 
+    for t in [60, 120, 240]:
+        logger(f"[TV360/DOM] - [START] - Đang tải danh sách kênh (Timeout: {t}s)")
+        try:
+            driver.set_page_load_timeout(t)
+            driver.get("https://tv360.vn/tv")
+            
+            # WORKAROUND: Kiểm tra trang báo lỗi do mạng sập
+            page_src = driver.page_source
+            if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
+                logger("[TV360/DOM] - [FAILED] - 🚨 Proxy Dead: Trình duyệt báo lỗi mạng")
+                raise Exception("Proxy Dead")
+                
+            time.sleep(3) 
+            
+            driver.execute_script("""
+                var totalHeight = 0; var distance = 600;
+                var timer = setInterval(() => {
+                    var scrollHeight = document.body.scrollHeight;
+                    window.scrollBy(0, distance);
+                    totalHeight += distance;
+                    if(totalHeight >= scrollHeight) clearInterval(timer);
+                }, 250);
+            """)
+            time.sleep(4) 
+            
+            dom_list = driver.execute_script(js_extractor_smart)
+            if dom_list:
+                for c in dom_list:
+                    tv360_channels.append({
+                        'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
+                        'group_name': c.get('group_name'), 
+                        'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
+                        'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
+                    })
+                dom_success = True
+                logger(f"[TV360/DOM] - [SUCCESS] - Lấy được {len(tv360_channels)} kênh miễn phí.")
+                break
+        except Exception as e: 
+            logger(f"[TV360/DOM] - [ERROR] - Ngoại lệ: {e}")
+        
+        logger("[TV360/DOM] - [REBOOT] - Lỗi/Timeout. Khởi động lại trình duyệt...")
+        driver = reboot_driver(driver, tv360_ip, tv360_proto)
+        
+    return driver, dom_success, tv360_channels
+
+def _tv360_fallback_from_old_file(old_links_dict, logger):
+    logger("[TV360/Fallback] - [START] - Đang khôi phục DOM từ file M3U cũ...")
+    tv360_channels = []
+    # BUSINESS RULE: Tương tự như VTV, chỉ khôi phục các kênh có khả năng lấy được từ file cũ đối với TV360.
+    for old_name, old_data in old_links_dict.items():
+        gn_lower = old_data.get('group', '').lower()
+        if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
+            tv360_channels.append({
+                'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
+                'group_name': old_data.get('group', 'Khác'), 
+                'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
+                'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
+            })
+    logger(f"[TV360/Fallback] - [SUCCESS] - Đã khôi phục {len(tv360_channels)} kênh TV360 từ file.")
+    return tv360_channels
+
+def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger):
+    logger("\n[TV360/Pipeline] - [INIT] - ====== BẮT ĐẦU CHU TRÌNH TV360 ======")
+    tv360_channels = []
+    tv360_proxy_stats = {}
+    tv360_ip, tv360_proto = None, "http"
+    driver = None
     dom_success = False
     no_proxy_attempts = 0
+
     while True:
-        if use_auto_proxy and not tv360_ip:
-            if alive_cached["tv360"] and alive_cached["tv360"]["ip"] not in exclude_proxies:
-                tv360_ip, tv360_proto = alive_cached["tv360"]["ip"], alive_cached["tv360"]["protocol"]
-            else:
-                tv360_ip, tv360_proto = get_best_proxy_for_target(vn_proxies, "tv360", exclude_proxies, logger)
-            
-        if not tv360_ip and use_auto_proxy:
-            break
-            
+        tv360_ip, tv360_proto = _get_active_proxy("tv360", alive_cached, exclude_proxies, vn_proxies, use_auto_proxy, logger, tv360_ip, tv360_proto)
+        if not tv360_ip and use_auto_proxy: break
         if not use_auto_proxy:
             if no_proxy_attempts >= 3: break
             no_proxy_attempts += 1
 
-        logger(f"▶ Mở trình duyệt DOM TV360 (Proxy: {tv360_ip} - Giao thức: {tv360_proto.upper()})")
+        logger(f"[TV360/Browser] - [START] - Mở trình duyệt (Proxy: {tv360_ip} | {tv360_proto.upper()})")
         driver = reboot_driver(driver, tv360_ip, tv360_proto)
         
-        for t in [60, 120, 240]:
-            logger(f"   [TV360] Đang tải danh sách kênh (DOM) - Chờ tối đa {t}s...")
-            try:
-                driver.set_page_load_timeout(t)
-                driver.get("https://tv360.vn/tv")
-                
-                # WORKAROUND: Kiểm tra trang báo lỗi do mạng sập
-                page_src = driver.page_source
-                if "ERR_CONNECTION" in page_src or "ERR_PROXY" in page_src or "ERR_TIMED_OUT" in page_src:
-                    logger("      [DEBUG TV360] 🚨 Phát hiện trình duyệt báo lỗi mạng. Cắt đứt tiến trình!")
-                    raise Exception("Proxy Dead")
-                    
-                time.sleep(3) 
-                
-                driver.execute_script("""
-                    var totalHeight = 0; var distance = 600;
-                    var timer = setInterval(() => {
-                        var scrollHeight = document.body.scrollHeight;
-                        window.scrollBy(0, distance);
-                        totalHeight += distance;
-                        if(totalHeight >= scrollHeight) clearInterval(timer);
-                    }, 250);
-                """)
-                time.sleep(4) 
-                
-                dom_list = driver.execute_script(js_extractor_smart)
-                if dom_list:
-                    for c in dom_list:
-                        tv360_channels.append({
-                            'id': str(c.get('id')), 'name': c.get('name'), 'logo': c.get('logo', ''),
-                            'group_name': c.get('group_name'), 
-                            'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
-                            'url': c.get('link'), 'm3u8_link': None, 'error_msg': None, 'skip': False
-                        })
-                    dom_success = True
-                    logger(f"      -> Thành công! Lấy được {len(tv360_channels)} kênh miễn phí.")
-                    break
-            except Exception as e: 
-                logger(f"      [DEBUG TV360] Lỗi: {e}")
-                pass
-            
-            logger(f"      -> Lỗi/Timeout. Đang khởi động lại trình duyệt xoá Cache...")
-            driver = reboot_driver(driver, tv360_ip, tv360_proto)
+        driver, dom_success, tv360_channels = _tv360_extract_dom_loop(driver, tv360_ip, tv360_proto, logger)
             
         if dom_success: break
         
         if tv360_ip:
-            logger(f"   [TV360] ⚠️ IP {tv360_ip} thất bại DOM. Loại bỏ và tìm IP khác...")
+            logger(f"[TV360/Proxy] - [REJECT] - IP {tv360_ip} thất bại. Loại bỏ và tìm IP khác...")
             exclude_proxies.add(tv360_ip)
             tv360_ip = None
 
     if not dom_success:
-        logger("   [TV360] ⚠️ DOM thất bại hoàn toàn. Đang khôi phục DOM từ file M3U cũ...")
-        # BUSINESS RULE: Tương tự như VTV, chỉ khôi phục các kênh có khả năng lấy được từ file cũ đối với TV360.
-        for old_name, old_data in old_links_dict.items():
-            gn_lower = old_data.get('group', '').lower()
-            if 'vĩnh long' in gn_lower or 'thvl' in gn_lower or 'htv' in gn_lower or 'vtv cab' in gn_lower or 'vtvcab' in gn_lower:
-                tv360_channels.append({
-                    'id': 'fallback', 'name': old_name, 'logo': old_data.get('logo', ''),
-                    'group_name': old_data.get('group', 'Khác'), 
-                    'source': 'tv360_dynamic', 'original_source': 'tv360_dynamic',
-                    'url': '', 'm3u8_link': None, 'error_msg': None, 'skip': False
-                })
-        logger(f"      -> Đã khôi phục DOM {len(tv360_channels)} kênh TV360 từ file.")
+        tv360_channels = _tv360_fallback_from_old_file(old_links_dict, logger)
     else:
         for c in tv360_channels:
             if c['logo'].startswith('data:image') or not c['logo']:
@@ -659,7 +672,7 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
     if driver and tv360_channels and tv360_channels[0]['source'] != 'fallback_only':
         channels_to_scan = [ch for ch in tv360_channels if ch['source'] == 'tv360_dynamic']
         if channels_to_scan:
-            logger(f"   [TV360] Bắt đầu duyệt ngầm {len(channels_to_scan)} Kênh TV360 (Đảo Proxy nếu Fail 3 kênh)...")
+            logger(f"[TV360/Pipeline] - [START] - Duyệt ngầm {len(channels_to_scan)} Kênh TV360...")
             driver = scan_channels_with_rotation(driver, channels_to_scan, 'tv360', old_links_dict, exclude_proxies, tv360_ip, tv360_proto, tv360_proxy_stats, vn_proxies, use_auto_proxy, logger)
         
     if driver: driver.quit()
