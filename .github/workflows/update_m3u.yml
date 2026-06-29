@@ -47,10 +47,10 @@ jobs:
           fi
 
       # FIX: Thêm bước gom file ảnh debug (nếu có) thành file zip và up lên Github Artifacts
-      - name: Tải ảnh Debug Screenshots lên Artifacts
-        uses: actions/upload-artifact@v4
-        if: always() # Luôn chạy bước này ngay cả khi bước chạy Python báo lỗi màu đỏ
-        with:
-          name: vtv-debug-screenshots
-          path: '*.png'
-          retention-days: 3 # Lưu trữ ảnh trên Github trong 3 ngày để dọn rác
+      #- name: Tải ảnh Debug Screenshots lên Artifacts
+      #  uses: actions/upload-artifact@v4
+      #  if: always() # Luôn chạy bước này ngay cả khi bước chạy Python báo lỗi màu đỏ
+      #  with:
+      #    name: vtv-debug-screenshots
+      #    path: '*.png'
+      #    retention-days: 3 # Lưu trữ ảnh trên Github trong 3 ngày để dọn rác
