@@ -1,8 +1,9 @@
+--- START OF FILE core_scrapers.py ---
+
 import time
 import json
 import re
 import os
-import sys
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from proxy_manager import get_best_proxy_for_target
@@ -49,19 +50,22 @@ def catch_m3u8_vtvgo(driver, url, max_wait=60):
         driver.set_page_load_timeout(max_wait)
         driver.get_log('performance') 
         driver.get(url)
-        time.sleep(2) 
-        try:
-            driver.execute_script("""
-                var btns = document.getElementsByTagName('button');
-                for (var i=0; i<btns.length; i++) {
-                    if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
-                }
-                var vids = document.getElementsByTagName('video');
-                if (vids.length > 0) vids[0].play();
-            """)
-        except: pass
+        
+        # FIX: Loại bỏ sleep tĩnh, chuyển logic click vào vòng lặp để đối phó với mạng chậm trên GitHub Actions.
 
         for i in range(max_wait):  
+            # WORKAROUND: Bám đuổi click Popup Điều khoản và Play Video liên tục mỗi giây
+            try:
+                driver.execute_script("""
+                    var btns = document.getElementsByTagName('button');
+                    for (var i=0; i<btns.length; i++) {
+                        if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
+                    }
+                    var vids = document.getElementsByTagName('video');
+                    if (vids.length > 0 && vids[0].paused) vids[0].play();
+                """)
+            except: pass
+
             logs = driver.get_log('performance')
             for entry in logs:
                 try:
@@ -238,18 +242,8 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
                 
                 logger(f"      [DEBUG VTV] Truy cập vtv1-1,1.html...")
                 driver.get("https://vtvgo.vn/channel/vtv1-1,1.html")
-                time.sleep(2) 
                 
-                try:
-                    driver.execute_script("""
-                        var btns = document.getElementsByTagName('button');
-                        for (var i=0; i<btns.length; i++) {
-                            if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
-                        }
-                        var vids = document.getElementsByTagName('video');
-                        if (vids.length > 0) vids[0].play();
-                    """)
-                except: pass
+                # FIX: Gỡ bỏ time.sleep(2) và thao tác click tĩnh 1 lần gây lỗi nghẽn DOM trên GitHub.
                 
                 api_json_data = None
                 captured_api_json = None
@@ -259,6 +253,18 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
                 
                 logger(f"      [DEBUG VTV] Đang chờ và quét Network Logs (CDP) tìm API Header và M3U8...")
                 for wait_sec in range(t):
+                    # WORKAROUND: Liên tục rà quét và click nút Đồng ý mỗi giây trong suốt quá trình chờ bắt Network.
+                    try:
+                        driver.execute_script("""
+                            var btns = document.getElementsByTagName('button');
+                            for (var i=0; i<btns.length; i++) {
+                                if(btns[i].innerText.includes('Đồng ý') || btns[i].innerText.includes('tiếp tục')) btns[i].click();
+                            }
+                            var vids = document.getElementsByTagName('video');
+                            if (vids.length > 0 && vids[0].paused) vids[0].play();
+                        """)
+                    except: pass
+
                     logs = driver.get_log('performance')
                     for entry in logs:
                         try:
@@ -418,17 +424,12 @@ def process_vtv_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_proxi
                     screenshot_path = os.path.join(os.getcwd(), f"debug_vtv_proxy_{int(time.time())}.png")
                     driver.save_screenshot(screenshot_path)
                     logger(f"      [DEBUG VTV CHUYÊN SÂU] 📸 Đã lưu ảnh chụp màn hình tại: {screenshot_path}")
-                    
-                    # FIX: DỪNG KHẨN CẤP NGAY SAU KHI LẤY ĐƯỢC ẢNH ĐẦU TIÊN
-                    logger(f"      [DEBUG VTV CHUYÊN SÂU] 🛑 Ép buộc dừng chương trình ngay lập tức để tiết kiệm thời gian chờ của bạn!")
-                    driver.quit()
-                    sys.exit(1)
-
                 except Exception as debug_err:
                     logger(f"      [DEBUG VTV CHUYÊN SÂU] ⚠️ Lỗi khi cố trích xuất thông tin debug: {debug_err}")
-                    driver.quit()
-                    sys.exit(1)
                 # --- KẾT THÚC DEBUG ---
+            
+                logger(f"      -> Chưa đủ dữ liệu. Đang khởi động lại trình duyệt xoá Cache...")
+                driver = reboot_driver(driver, vtv_ip, vtv_proto)
 
         if dom_success: break
         
@@ -607,3 +608,4 @@ def process_tv360_pipeline(old_links_dict, alive_cached, exclude_proxies, vn_pro
         
     if driver: driver.quit()
     return tv360_channels, tv360_proxy_stats
+--- END OF FILE core_scrapers.py ---
