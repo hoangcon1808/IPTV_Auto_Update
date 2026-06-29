@@ -10,38 +10,47 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Thiết lập Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Thiết lập Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Cài đặt thư viện cần thiết
-      run: |
-        python -m pip install --upgrade pip
-        pip install selenium requests[socks]
+      - name: Cài đặt thư viện cần thiết
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium requests[socks]
 
-    - name: Chạy Tool Cào Data (Debug Mode)
-      env:
-        PYTHONIOENCODING: utf-8
-      run: python -u "m3u link.py" --startup
+      - name: Chạy Tool Cào Data (Debug Mode)
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -u "m3u link.py" --startup
 
-    - name: Lưu đè dữ liệu lên GitHub
-      shell: bash
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
-        # Add cả 2 file cùng lúc để Git không báo lỗi Unstaged
-        git add vn.m3u iptv_tool_config.json
-        
-        # Kiểm tra xem có thay đổi nào mới không (bao gồm cả file mới tạo)
-        if [[ -n "$(git status --porcelain)" ]]; then
-          git commit -m "Auto Update: Làm mới Token IPTV & Cập nhật Proxy Cache"
-          git pull origin main --rebase -X ours
-          git push origin main
-        else
-          echo "Không có thay đổi nào để commit."
-        fi
+      - name: Lưu đè dữ liệu lên GitHub
+        shell: bash
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add cả 2 file cùng lúc để Git không báo lỗi Unstaged
+          git add vn.m3u iptv_tool_config.json
+          
+          # Kiểm tra xem có thay đổi nào mới không (bao gồm cả file mới tạo)
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "Auto Update: Làm mới Token IPTV & Cập nhật Proxy Cache"
+            git pull origin main --rebase -X ours
+            git push origin main
+          else
+            echo "Không có thay đổi nào để commit."
+          fi
+
+      # FIX: Thêm bước gom file ảnh debug (nếu có) thành file zip và up lên Github Artifacts
+      - name: Tải ảnh Debug Screenshots lên Artifacts
+        uses: actions/upload-artifact@v4
+        if: always() # Luôn chạy bước này ngay cả khi bước chạy Python báo lỗi màu đỏ
+        with:
+          name: vtv-debug-screenshots
+          path: '*.png'
+          retention-days: 3 # Lưu trữ ảnh trên Github trong 3 ngày để dọn rác
