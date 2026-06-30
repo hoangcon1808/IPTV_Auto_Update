@@ -36,9 +36,9 @@ https://lsm-hlc.tv360.vn:18443/348.m3u8?AdaptiveType=HLS&VOD_RequestID=jKQSNY7t2
 #EXTINF:-1 tvg-id="VTVcab10 - On Cine HD" tvg-logo="https://img-zlr1.tv360.vn/image1/2021/09/07/17/1631009339636/95e9bc61877c_480_270.png" group-title="Kênh VTV Cab", VTVcab10 - On Cine HD
 https://fo-hlc.tv360.vn/bpk-tv/226/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4ODIzMzYsInVyaSI6Ii9icGstdHYvMjI2L291dHB1dC9pbmRleC5tM3U4In0.yNKL6GDe5FvHZvZ4WgooHqlJDiwaDwBLel1G7K-6BBY&minrate=0&maxrate=10000000&uid=160.22.17.4
 #EXTINF:-1 tvg-id="VTVcab19 – Vie Dramas" tvg-logo="https://img-zlr1.tv360.vn/image1/2024/01/03/07/1704241415128/050934936855_480_270.png" group-title="Kênh VTV Cab", VTVcab19 – Vie Dramas
-https://fo-hlc.tv360.vn/bpk-tv/339/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4Nzg3ODQsInVyaSI6Ii9icGstdHYvMzM5L291dHB1dC9pbmRleC5tM3U4In0.5EmpYTz54NPcJ_zpy7CW0dxyQrE2UEvy66ntLnabJBs&minrate=0&maxrate=10000000&uid=160.22.17.4
+https://fo-hlc.tv360.vn/bpk-tv/339/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4ODI4NDksInVyaSI6Ii9icGstdHYvMzM5L291dHB1dC9pbmRleC5tM3U4In0.tkfQUiGJGiOQkeC3tY9fLBFS1cwdtzfxOD6rw-FAX3I&minrate=0&maxrate=10000000&uid=113.160.132.26
 #EXTINF:-1 tvg-id="VTVcab 8 Bibi SD" tvg-logo="https://img-zlr1.tv360.vn/image1/2023/07/19/08/1689731979485/df22eff3c261_480_270.png" group-title="Kênh VTV Cab", VTVcab 8 Bibi SD
-https://fo-hlc.tv360.vn/bpk-tv/263/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4Nzg3ODcsInVyaSI6Ii9icGstdHYvMjYzL291dHB1dC9pbmRleC5tM3U4In0.4JE1N60F_Jv9pFMxQVBeISsIaaBZ1CN515DjQw4izaQ&minrate=0&maxrate=10000000&uid=160.22.17.4
+https://fo-hlc.tv360.vn/bpk-tv/263/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4ODI4NTUsInVyaSI6Ii9icGstdHYvMjYzL291dHB1dC9pbmRleC5tM3U4In0._GTkUwcZCn3eboQ906stV4t5W0RDjlfG7fCo0MfHjU4&minrate=0&maxrate=10000000&uid=113.160.132.26
 #EXTINF:-1 tvg-id="VTVcab 21- Cartoon Kids HD" tvg-logo="https://img-zlr1.tv360.vn/image1/2025/07/21/14/1753083917555/313a5cc8943c_480_270.png" group-title="Kênh VTV Cab", VTVcab 21- Cartoon Kids HD
 https://fo-hlc.tv360.vn/bpk-tv/234/output/index.m3u8?auth=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtZXRob2QiOiJHRVQiLCJleHAiOjE3ODI4ODI2MDMsInVyaSI6Ii9icGstdHYvMjM0L291dHB1dC9pbmRleC5tM3U4In0.f-9uZWYuM6x_Hwa0o2q8gtTEgdJLU9Kqjv4BrmNFr6A&minrate=0&maxrate=10000000&uid=160.22.17.4
 #EXTINF:-1 tvg-id="Vtvcab 4 – On Movies" tvg-logo="https://img-zlr1.tv360.vn/image1/2023/02/16/16/1676540062912/f21d4df5b545_480_270.png" group-title="Kênh VTV Cab", Vtvcab 4 – On Movies
@@ -128,7 +128,7 @@ https://vtvgolive-liveh34.vtvdigital.vn/b-rYekgCvErlltzoPF7XsQ/1782874820/hls/DO
 #EXTINF:-1 tvg-id="Truyền hình Khánh Hòa" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/logo/KTVHD_150x902_1675158888.webp" group-title="Kênh thiết yếu và địa phương", Truyền hình Khánh Hòa
 https://vtvgolive-liveh12.vtvdigital.vn/9765X4onQTMGZ-R-XcF4eg/1782874825/hls/KHANHHOATV/index.m3u8
 #EXTINF:-1 tvg-id="Truyền hình Lai Châu" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/logo/LaiChu_ON_150x901_1675158882.webp" group-title="Kênh thiết yếu và địa phương", Truyền hình Lai Châu
-https://luuchieu.truyenhinhso.vn/media/live/AF157BFA0E9FE004C61AD76E/index.m3u8
+https://vtvgolive-liveh12.vtvdigital.vn/89eiJxF6iP4SKweoHAe0Bg/1782874920/hls/KHANHHOATV/01.m3u8
 #EXTINF:-1 tvg-id="Truyền hình Tây Ninh 1" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/channel/20260109/2026010916/ksvjJliT5U-v26.TAYNINH-LOGO-KENHVTVgo-150x90.webp" group-title="Kênh thiết yếu và địa phương", Truyền hình Tây Ninh 1
 https://live.mediatech.vn/live/2851dc2c9af68834814a89e61db0faee561/playlist.m3u8
 #EXTINF:-1 tvg-id="Truyền hình Thái Nguyên" tvg-logo="https://vtvgo-assets.vtvdigital.vn/assets/images/v2/logo/TN1HD_150x902_1675158909.webp" group-title="Kênh thiết yếu và địa phương", Truyền hình Thái Nguyên
